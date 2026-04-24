@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1b12e40875430004f86d1c5cfff5eea6, type: 3}
+  m_Name: Anbi_Skill
+  m_EditorClassIdentifier: 
+  _attackStyle: 1
+  _comboName: Anbi_Skill
+  _comboColdTime: 0
+  _comboDamage: 20
+  _attackDistance: 3.5
+  _comboOffset: 1.7
+  _hitName:
+  - Hit_1
+  - Hit_2
+  _parryName:
+  - Hit_1
+  - Hit_2
+  _ATKCount: 0
+  _pauseFrameTime: 0
+  _shakeForceList: []
+  _pauseFrameTimeList:
+  - 0.1
+  - 0
+  - 0

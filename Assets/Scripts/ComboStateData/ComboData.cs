@@ -1,0 +1,54 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public enum AttackStyle
+{ 
+    Attack,
+    Skill,
+    FinishSkill,
+}
+[CreateAssetMenu(fileName ="ComboData",menuName ="Create/Asset/ComboData")]
+public class ComboData : ScriptableObject
+{
+    [SerializeField,Header("连招数据")] private AttackStyle _attackStyle;
+    [SerializeField] private string _comboName;
+    [SerializeField] private float _comboColdTime;
+    [SerializeField] private float _comboDamage;
+    [SerializeField] private float _attackDistance;
+    [SerializeField] private float _comboOffset;
+    [SerializeField] private string[] _hitName;
+    [SerializeField] private string[] _parryName;
+
+    
+    [SerializeField, Header("打击感")]
+    private int _ATKCount;
+    [SerializeField]private float _pauseFrameTime;
+    [SerializeField] private float[] _shakeForceList;
+    [SerializeField] private float[] _pauseFrameTimeList;
+
+
+    #region 属性封装
+    public AttackStyle attackStyle => _attackStyle;
+    public string comboName => _comboName;
+    public float comboDamage => _comboDamage;
+    public float comboColdTime => _comboColdTime;
+    public float attackDistance => _attackDistance;
+    public float comboOffset => _comboOffset;
+    
+    public string hitName => _hitName[Random.Range(0, _hitName.Length)];
+
+    public string parryName => _parryName[Random.Range(0, _parryName.Length)];
+    public float[] shakeForce => _shakeForceList;
+
+    public float pauseFrameTime => _pauseFrameTime;
+
+    public float[] pauseFrameTimeList => _pauseFrameTimeList;
+
+    public int ATKCount => _ATKCount;
+    
+    #endregion
+
+   
+
+}

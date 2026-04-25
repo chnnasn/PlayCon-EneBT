@@ -12,7 +12,7 @@ using Tools;
 
         [SerializeField] public string currentComboState;
 
-        [SerializeField] public Transform enemy;
+        [SerializeField] private Enemy currentEnemy;
 
         [SerializeField] public PlayerSO playerSO;
 
@@ -24,6 +24,7 @@ using Tools;
 
         public PlayerComboStateMachine comboStateMachine { get;private set; }
         public new Transform camera { get; private set; }
+        public Enemy CurrentEnemy => currentEnemy;
         
         protected override void Awake()
         {
@@ -187,40 +188,46 @@ using Tools;
 
         public void PlayVFX(string name)
         {
-            //VFX_PoolManager.MainInstance.TryGetVFX(characterName, name);
+            
         }
 
         public void PlayFootSound()
         {
-            //Debug.Log("播放脚步声");
-            //SFX_PoolManager.MainInstance.TryGetSoundPool(SoundStyle.FOOT,transform.position,Quaternion.identity);
+           
         }
         public void PlayFootBackSound()
         {
-            //SFX_PoolManager.MainInstance.TryGetSoundPool(SoundStyle.FOOTBACK,transform.position,Quaternion.identity);
+           
         }
 
         public void PlayWeaponBackSound()
         {
-            //SFX_PoolManager.MainInstance.TryGetSoundPool(SoundStyle.WeaponBack, characterName.ToString(), transform.position);
+            
         }
 
         public void PlayWeaponEndSound()
         {
-            //SFX_PoolManager.MainInstance.TryGetSoundPool(SoundStyle.WeaponEnd, characterName.ToString(), transform.position);
+            
         }
 
         #endregion
         public void PlayDodgeSound()
         {
-            //SFX_PoolManager.MainInstance.TryGetSoundPool(SoundStyle.DodgeSound, transform.position, Quaternion.identity);
+            
         }
-        public void PlaySwitchWindSound()
+
+        public void SetCurrentEnemy(Enemy enemyTarget)
         {
-            //SFX_PoolManager.MainInstance.TryGetSoundPool(SoundStyle.SwitchInWindSound, transform.position, Quaternion.identity);
+            currentEnemy = enemyTarget;
         }
-        public void PlaySwitchInVoice()
+
+        private void OnDrawGizmosSelected()
         {
-            //SFX_PoolManager.MainInstance.TryGetSoundPool(SoundStyle.SwitchInVoice, characterName.ToString(), transform.position);
-        }    
+            if (comboStateMachine == null || comboStateMachine.ATKIngState == null)
+            {
+                return;
+            }
+
+            comboStateMachine.ATKIngState.DrawEnemyDetectionGizmos();
+        }
     }

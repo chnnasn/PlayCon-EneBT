@@ -1,18 +1,21 @@
 using Tools;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace PlayerState
 {
     public class CharacterCombo : CharacterComboBase
     {
+        private const float AttackWindowGizmoDuration = 0.15f;
+        private const int MaxOverlapHits = 12;
+        private float attackWindowGizmoExpireTime = -1f;
+        private readonly Collider[] overlapHits = new Collider[MaxOverlapHits];
 
         public CharacterCombo(Animator animator, Transform playerTransform,Transform cameraTransform, PlayerComboReusableData reusableData, PlayerComboSOData playerComboSOData, Player player) : base(animator, playerTransform, cameraTransform, reusableData, playerComboSOData , player )
         {
            
         }
 
-        #region 闪A处理
+        #region ??A????
        
 
         public  void DodgeComboInput()
@@ -23,10 +26,10 @@ namespace PlayerState
         #endregion
         
 
-        #region 技能处理
+        #region ???????
 
         /// <summary>
-        /// 主动技能
+        /// ????????
         /// </summary>
         /// <returns></returns>
         public bool CanFinishSkillInput()
@@ -53,7 +56,7 @@ namespace PlayerState
         }
 
         /// <summary>
-        /// 终极大招
+        /// ???????
         /// </summary>
         public void FinishSkillInput()
         {
@@ -65,7 +68,7 @@ namespace PlayerState
             ExecuteSkill();
         }
         /// <summary>
-        /// 大招
+        /// ????
         /// </summary>
         public void SkillInput()
         {
@@ -78,50 +81,138 @@ namespace PlayerState
         }
        
         /// <summary>
-        /// 执行大招
+        /// ???????
         /// </summary>
         private void ExecuteSkill()
         {
             ReSetATKIndex(0);
-            //播放语音
+            //????????
             PlayCharacterVoice(reusableData.currentSkill);
-            //播放武器音效
+            //????????????
             PlayWeaponSound(reusableData.currentSkill);
             animator.CrossFadeInFixedTime(reusableData.currentSkill.comboName, 0.1f);
         }
         
         #endregion
 
-        #region 敌人检测
+        #region ??????
         public void UpdateDetectionDir()
         {
-         
-            Vector3 camForwardDir = Vector3.zero;
-            camForwardDir.Set(reusableData.cameraTransform.forward.x, 0, reusableData.cameraTransform.forward.z);
-            camForwardDir.Normalize();
-         
-           reusableData.detectionDir = camForwardDir * PlayerInputSystem.MainInstance.PlayerMove.y + reusableData.cameraTransform.right * PlayerInputSystem.MainInstance.PlayerMove.x;
-           reusableData.detectionDir.Normalize();
+            // ????????????????????????
+            reusableData.detectionDir = playerTransform.forward;
         }
         public void UpdateEnemy()
         {
-            UpdateDetectionDir();
-
-            reusableData.detectionOrigin = new Vector3(playerTransform.position.x, playerTransform.position.y + 0.7f, playerTransform.position.z);
-           
-            /*if (Physics.SphereCast(reusableData.detectionOrigin,enemyDetectionData.detectionRadius, reusableData.detectionDir, out var hit, enemyDetectionData.detectionLength, enemyDetectionData.WhatIsEnemy))
+            // 仅在攻击相关动画期间检测目标，避免非战斗时持续扫描。
+            if (!animator.AnimationAtTag("ATK") && !animator.AnimationAtTag("Skill"))
             {
-                if (GameBlackboard.MainInstance.GetEnemy() != hit.collider.transform || GameBlackboard.MainInstance.GetEnemy() == null)
-                {   
-                    GameBlackboard.MainInstance.SetEnemy(hit.collider.transform);
-                }
-            }*/
+                return;
+            }
+
+            // 已有目标时直接复用，保证朝向逻辑稳定。
+            if (player.CurrentEnemy != null)
+            {
+                return;
+            }
+
+            DetectEnemyInAttackWindow();
         }
         
-        public void OnDrawGizmos()
+        public void DrawDetectionGizmos()
         {
-            Gizmos.color = Color.white;
-            //Gizmos.DrawWireSphere(reusableData. detectionOrigin + reusableData.detectionDir * enemyDetectionData.detectionLength, enemyDetectionData.detectionRadius);
+            if (playerTransform == null || reusableData == null || enemyDetectionData == null)
+            {
+                return;
+            }
+            if (Time.time > attackWindowGizmoExpireTime)
+            {
+                return;
+            }
+
+            var detectionOrigin = new Vector3(playerTransform.position.x, playerTransform.position.y + 0.7f, playerTransform.position.z);
+            var detectionDir = reusableData.detectionDir.sqrMagnitude < 0.0001f ? playerTransform.forward : reusableData.detectionDir;
+            detectionDir.y = 0f;
+            detectionDir.Normalize();
+
+            var sphereCenter = detectionOrigin + detectionDir * enemyDetectionData.detectionLength;
+
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawLine(detectionOrigin, sphereCenter);
+            Gizmos.DrawWireSphere(sphereCenter, enemyDetectionData.detectionRadius);
+
+            Gizmos.color = new Color(0.2f, 1f, 0.9f, 0.15f);
+            Gizmos.DrawSphere(sphereCenter, enemyDetectionData.detectionRadius);
+        }
+
+        protected override void OnAttackWindowTriggered()
+        {
+            attackWindowGizmoExpireTime = Time.time + AttackWindowGizmoDuration;
+            DetectEnemyInAttackWindow();
+        }
+
+        private void DetectEnemyInAttackWindow()
+        {
+            UpdateDetectionDir();
+            reusableData.detectionOrigin = new Vector3(playerTransform.position.x, playerTransform.position.y + 0.7f, playerTransform.position.z);
+
+            if (enemyDetectionData == null)
+            {
+                player.SetCurrentEnemy(null);
+                return;
+            }
+
+            if (Physics.SphereCast(reusableData.detectionOrigin, enemyDetectionData.detectionRadius, reusableData.detectionDir, out var hit, enemyDetectionData.detectionLength, enemyDetectionData.WhatIsEnemy))
+            {
+                player.SetCurrentEnemy(hit.collider.GetComponentInParent<Enemy>());
+                return;
+            }
+
+            var sphereCenter = reusableData.detectionOrigin + reusableData.detectionDir * enemyDetectionData.detectionLength;
+            var overlapCount = Physics.OverlapSphereNonAlloc(
+                sphereCenter,
+                enemyDetectionData.detectionRadius,
+                overlapHits,
+                enemyDetectionData.WhatIsEnemy,
+                QueryTriggerInteraction.Collide);
+
+            Enemy nearestEnemy = null;
+            var nearestDistance = float.MaxValue;
+            for (var i = 0; i < overlapCount; i++)
+            {
+                var collider = overlapHits[i];
+                if (collider == null)
+                {
+                    continue;
+                }
+
+                var enemyTarget = collider.GetComponentInParent<Enemy>();
+                if (enemyTarget == null)
+                {
+                    continue;
+                }
+
+                var distance = (enemyTarget.transform.position - playerTransform.position).sqrMagnitude;
+                if (distance >= nearestDistance)
+                {
+                    continue;
+                }
+
+                nearestDistance = distance;
+                nearestEnemy = enemyTarget;
+            }
+
+            for (var i = 0; i < overlapCount; i++)
+            {
+                overlapHits[i] = null;
+            }
+
+            if (nearestEnemy != null)
+            {
+                player.SetCurrentEnemy(nearestEnemy);
+                return;
+            }
+
+            player.SetCurrentEnemy(null);
         }
 
         #endregion

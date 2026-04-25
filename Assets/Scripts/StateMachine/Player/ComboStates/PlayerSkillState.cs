@@ -22,6 +22,7 @@ namespace FSM
 
         public override void Update()
         {
+            characterCombo.UpdateEnemy();
             characterCombo.UpdateAttackLookAtEnemy();
         }
         

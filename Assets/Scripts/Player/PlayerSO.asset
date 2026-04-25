@@ -38,4 +38,9 @@ MonoBehaviour:
       <executeCombo>k__BackingField: {fileID: 0}
       <skillCombo>k__BackingField: {fileID: 11400000, guid: 05cf71462fa24774a88243d48d91ef43, type: 2}
       <finishSkillCombo>k__BackingField: {fileID: 11400000, guid: 6162601bdb44cf8409197c4038bf4d45, type: 2}
-      <switchSkill>k__BackingField: {fileID: 0}
+    <enemyDetectionData>k__BackingField:
+      <detectionLength>k__BackingField: 1
+      <detectionRadius>k__BackingField: 1
+      <WhatIsEnemy>k__BackingField:
+        serializedVersion: 2
+        m_Bits: 128

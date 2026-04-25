@@ -39,18 +39,6 @@ public abstract class EnemyState : IState
 
     protected void MoveTo(Vector3 point, float speed)
     {
-        var flatDirection = point - enemy.transform.position;
-        flatDirection.y = 0f;
-
-        if (flatDirection.sqrMagnitude < 0.0001f)
-        {
-            return;
-        }
-
-        var desired = flatDirection.normalized;
-        enemy.RotateTowards(desired);
-
-        // Keep constant-speed movement towards target.
-        enemy.MoveInDirection(desired, speed);
+        enemy.FaceTargetThenMove(point, speed);
     }
 }

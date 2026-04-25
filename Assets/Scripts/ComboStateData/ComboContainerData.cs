@@ -48,6 +48,13 @@ namespace PlayerState
         }
         
     }
+    
+    public float GetComboDistance(int index)
+    {
+        if (comboDates.Count == 0) { return 0; }
+        if (comboDates[index].attackDistance== 0) { Debug.LogWarning(index + "的索引值下没有设置连招的攻击距离"); }
+        return comboDates[index].attackDistance;
+    }
 
     public string GetComboHitName(int index)
     {

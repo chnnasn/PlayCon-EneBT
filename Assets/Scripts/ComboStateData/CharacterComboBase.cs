@@ -9,19 +9,20 @@ namespace PlayerState
         protected Transform playerTransform { get; }
         protected PlayerComboReusableData reusableData { get; }
         protected PlayerComboSOData comboData{ get; }
+        protected EnemyDetectionData enemyDetectionData { get; }
 
         public Player player { get; }
 
 
         public CharacterComboBase(Animator animator, Transform playerTransform,Transform cameraTransform , PlayerComboReusableData reusableData, PlayerComboSOData playerComboSOData,Player player)
         {
-            //get访问器可以在构造函数里面赋值，而不能在其他地方赋值
             this.animator = animator;
             this.playerTransform = playerTransform;
             this.reusableData = reusableData;
             comboData = playerComboSOData;
             reusableData.cameraTransform = cameraTransform;
             this.player = player;
+            enemyDetectionData = player.playerSO.ComboData.enemyDetectionData;
 
             if (comboData.heavyCombo != null)
             {
@@ -29,7 +30,6 @@ namespace PlayerState
             }
             if (comboData.lightCombo != null)
             {
-                //初始化其实就是缓存数据
                 comboData.lightCombo.Init();
             }
         }
@@ -67,7 +67,7 @@ namespace PlayerState
                 reusableData.comboIndex = 0;
             }
         }
-        #region 一般攻击
+        #region ?????
         public virtual void LightComboInput()
         {
          
@@ -78,7 +78,7 @@ namespace PlayerState
                 reusableData.currentCombo = comboData.lightCombo;
                 ReSetComboInfo();
             }
-            //确保轻攻击是第一个轻攻击
+
             reusableData.currentCombo.ResetComboDates();
 
             ExecuteBaseCombo();
@@ -107,7 +107,7 @@ namespace PlayerState
             }
             reusableData.currentCombo.SwitchDodgeATK();
             ReSetComboInfo();
-            ReSetATKIndex(0);
+            ReSetATKIndex();
             ExecuteBaseCombo();
         }
 
@@ -128,7 +128,7 @@ namespace PlayerState
             animator.CrossFade(comboName, 0.111f, 0);
             float transitionDuration = reusableData.currentIndex.Value == 0 ? 0.03f : 0.111f;
             animator.CrossFadeInFixedTime(comboName, transitionDuration, 0);
-            //播放语音
+    
             PlayCharacterVoice(reusableData.currentCombo.comboDates[reusableData.currentIndex.Value]);
             StartPlayWeapon();
 
@@ -151,8 +151,8 @@ namespace PlayerState
         #endregion
         
 
-        #region 动画事件
-        public void DisConnectCombo()//事件调用
+        #region ???????
+        public void DisConnectCombo()
         {
             reusableData.canLink = false;
         }
@@ -171,30 +171,45 @@ namespace PlayerState
         }
         public void PlayComboFX()
         {
-            //SFX_PoolManager.MainInstance.TryGetSoundPool(reusableData.currentCombo.GetComboSoundStyle(reusableData.currentIndex.Value), playerTransform.position, Quaternion.identity);
+           
         }
 
         #endregion
 
-
-        //?????????????????
+        
         public void ATK()
         {
-            //AttackTrigger();
+            OnAttackWindowTriggered();
+            AttackTrigger();
 
         }
+        protected virtual void OnAttackWindowTriggered()
+        {
+        }
+        
+        #region ??????
+        protected bool AttackDetection(ComboContainerData comboContainerData)
+        {
+
+            if (player.CurrentEnemy == null) { return false; }
+            if (MathToos.DistanceForTarget(player.CurrentEnemy.transform, playerTransform) > comboContainerData.
+                    GetComboDistance(reusableData.currentIndex.Value)) { return false; }
+            if (MathToos.GetAngleForTargetDirection(player.CurrentEnemy.transform, playerTransform) < 80) { return false; }
+            return true;
+        }
+        
+        #endregion 
+        
 
         protected int UpdateExecuteIndex(ComboContainerData containerData)
         {
             return Random.Range(0, containerData.GetComboMaxCount());
         }
         
-        #region 更新伤害点
-        /// <summary>
-        /// 重置伤害点的计数
-        /// </summary>
-        /// <param name="这个参数没意义"></param>
-        public void ReSetATKIndex(int index)//???????????????????????????????????????????????????????A??????????????A???????????????0
+        #region ?????????
+        
+        //????api
+        public void ReSetATKIndex(int index= 0)
         {
             reusableData.ATKIndex = 0;
         }
@@ -205,42 +220,37 @@ namespace PlayerState
         #endregion
 
         #region 传递伤害
-        /*private void AttackTrigger()
+        private void AttackTrigger()
         {
             if (animator.AnimationAtTag("ATK") )
             {
                 UpdateATKIndex();
-               // Debug.Log("???ATK????"+ reusableData.ATKIndex) ;
+
                  CameraHitFeel.MainInstance.CameraShake(reusableData.currentCombo.GetComboShakeForce(reusableData.currentIndex.Value,reusableData.ATKIndex));
-                Debug.Log(reusableData.currentCombo);
                 if (!AttackDetection(reusableData.currentCombo)) { return; }
 
-                  GameEventsManager.MainInstance.CallEvent("???????",
-                  reusableData.currentCombo.GetComboDamage(reusableData.currentIndex.Value),
-                  reusableData.currentCombo.GetComboHitName(reusableData.currentIndex.Value),
-                  reusableData.currentCombo.GetComboParryName(reusableData.currentIndex.Value),
-                  playerTransform, GameBlackboard.MainInstance.GetEnemy(),
-                  this);
+                var hitEnemy = player.CurrentEnemy;
+                GameEventsManager.MainInstance.CallEvent(HealthState.TriggerDamage.ToString(),
+                reusableData.currentCombo.GetComboDamage(reusableData.currentIndex.Value),
+                reusableData.currentCombo.GetComboHitName(reusableData.currentIndex.Value),
+                reusableData.currentCombo.GetComboParryName(reusableData.currentIndex.Value),
+                playerTransform, hitEnemy.transform,
+                this);
+                player.SetCurrentEnemy(null);
 
                  CameraHitFeel.MainInstance.PF(reusableData.currentCombo.GetPauseFrameTime(reusableData.currentIndex.Value, reusableData.ATKIndex));
-                //Debug.Log("QTE????????" + reusableData.canQTE);
-                //Debug.Log("?????ATK???????"+reusableData.ATKIndex);
-                //Debug.Log("????????ATK???????" + reusableData.currentCombo.GetComboATKCount(reusableData.currentIndex.Value));
-                #region ????QTE
-                if (reusableData.canQTE && reusableData.ATKIndex >= reusableData.currentCombo.GetComboATKCount(reusableData.currentIndex.Value))
-                {
-                    TriggerSwitchSkill();
-                }
-                #endregion
+
 
             }
             else if (animator.AnimationAtTag("Skill"))
             {
                 UpdateATKIndex();
-
-                if (!SkillDetection(reusableData.currentSkill)) { return; }
+                
                
-                GameEventsManager.MainInstance.CallEvent("???????", reusableData.currentSkill.comboDamage, reusableData.currentSkill.hitName, reusableData.currentSkill.parryName, playerTransform, GameBlackboard.MainInstance.GetEnemy(),this);
+                if (player.CurrentEnemy == null) { return; }
+                var skillEnemy = player.CurrentEnemy;
+                GameEventsManager.MainInstance.CallEvent(HealthState.TriggerDamage.ToString(), reusableData.currentSkill.comboDamage, reusableData.currentSkill.hitName, reusableData.currentSkill.parryName, playerTransform, skillEnemy.transform,this);
+                player.SetCurrentEnemy(null);
 
                 #region ???
                 if (reusableData.currentSkill.pauseFrameTimeList!=null && reusableData.currentSkill.pauseFrameTimeList.Length > 0&& reusableData.ATKIndex <= reusableData.currentSkill.pauseFrameTimeList.Length)
@@ -253,14 +263,7 @@ namespace PlayerState
                 }
 
                 #endregion
-
-                #region ????QTE
-
-                if (reusableData.canQTE && reusableData.ATKIndex >= reusableData.currentSkill.ATKCount)
-                {
-                    TriggerSwitchSkill();
-                }
-                #endregion
+                
 
                 #region ????
                 if (reusableData.currentSkill.shakeForce==null||reusableData.ATKIndex > reusableData.currentSkill.shakeForce.Length)//???????????????ATK??force???????????ATKindex????????force?????
@@ -270,24 +273,35 @@ namespace PlayerState
                 CameraHitFeel.MainInstance.CameraShake(reusableData.currentSkill.shakeForce[reusableData.ATKIndex-1]);
                 #endregion
             }
-            else//??????????????????????????????????
+            else
             {
                 if (!AttackDetection(comboData.executeCombo)) { return; }
-                GameEventsManager.MainInstance.CallEvent("???????", comboData.executeCombo.GetComboDamage(reusableData.executeIndex));
+                if (player.CurrentEnemy == null) { return; }
+                var executeEnemy = player.CurrentEnemy;
+                GameEventsManager.MainInstance.CallEvent(
+                    HealthState.TriggerDamage.ToString(),
+                    comboData.executeCombo.GetComboDamage(reusableData.executeIndex),
+                    comboData.executeCombo.GetComboHitName(reusableData.executeIndex),
+                    comboData.executeCombo.GetComboParryName(reusableData.executeIndex),
+                    playerTransform,
+                    executeEnemy.transform,
+                    this);
+                player.SetCurrentEnemy(null);
             }
 
-        }*/
+        }
         #endregion
+
 
         public void UpdateAttackLookAtEnemy()
         {
-            /*if (GameBlackboard.MainInstance.GetEnemy() == null) { return; }
-            if ((animator.AnimationAtTag("ATK") && animator.GetCurrentAnimatorStateInfo(0).normalizedTime < 0.3f)|| animator.AnimationAtTag("Skill"))
+            if (player.CurrentEnemy == null) { return; }
+            if ((animator.AnimationAtTag("ATK") && animator.GetCurrentAnimatorStateInfo(0).normalizedTime < 0.3f) || animator.AnimationAtTag("Skill"))
             {
-                if (DevelopmentToos.DistanceForTarget(playerTransform, GameBlackboard.MainInstance.GetEnemy()) > 6.5f) return;
-                if (DevelopmentToos.DistanceForTarget(playerTransform, GameBlackboard.MainInstance.GetEnemy()) < 0.09f) return;
-                playerTransform.LookAt(GameBlackboard.MainInstance.GetEnemy().position, 60);
-            }*/
+                if (MathToos.DistanceForTarget(playerTransform, player.CurrentEnemy.transform) > 6.5f) return;
+                if (MathToos.DistanceForTarget(playerTransform, player.CurrentEnemy.transform) < 0.09f) return;
+                playerTransform.LookAt(player.CurrentEnemy.transform.position, 60);
+            }
 
         }
 
@@ -308,18 +322,18 @@ namespace PlayerState
             }
         }
 
-        #region 播放音效
+        #region ????????
         private void StartPlayWeapon()
         {
             PlayWeaponSound(reusableData.currentCombo.comboDates[reusableData.currentIndex.Value]);
         }
         protected void PlayCharacterVoice(ComboData comboData)
         {
-            //SFX_PoolManager.MainInstance.TryGetSoundPool(SoundStyle.ComboVoice,comboData.comboName, playerTransform.position);
+            
         }
         protected void PlayWeaponSound(ComboData comboData)
         {
-            //SFX_PoolManager.MainInstance.TryGetSoundPool(SoundStyle.WeaponSound, comboData.comboName, playerTransform.position);
+            
         }
 
         #endregion

@@ -73,6 +73,10 @@ namespace FSM
             characterCombo.UpdateEnemy();
             characterCombo.CheckCanLinkCombo();
         }
+        public void DrawEnemyDetectionGizmos()
+        {
+            characterCombo.DrawDetectionGizmos();
+        }
         protected virtual void AddInputActionEvent()
         {
             PlayerInputSystem.MainInstance.inputActions.Player.L_AtK.started += OnAttackInput;

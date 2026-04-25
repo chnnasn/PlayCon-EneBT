@@ -134,6 +134,12 @@ public class ControllerBase : MonoBehaviour
             characterController.Move(dir * Time.deltaTime * moveMult);
         }
     }
+
+    public Animator GetAnimator()
+    {   
+        return characterAnimator;
+    }
+
     /// <summary>
     /// 绘制地面检测
     /// </summary>

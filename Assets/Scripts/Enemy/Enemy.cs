@@ -33,9 +33,46 @@ public class Enemy : EnemyControllerBase
     public Vector3 GetRandomPatrolPoint()
     {
         var size = Data != null ? Data.patrolAreaSize : new Vector2(8f, 8f);
-        var randomX = Random.Range(-size.x * 0.5f, size.x * 0.5f);
-        var randomZ = Random.Range(-size.y * 0.5f, size.y * 0.5f);
-        return new Vector3(PatrolAreaCenter.x + randomX, PatrolAreaCenter.y, PatrolAreaCenter.z + randomZ);
+        var halfX = size.x * 0.5f;
+        var halfZ = size.y * 0.5f;
+        var currentPos = transform.position;
+        var backward = -transform.forward;
+        backward.y = 0f;
+        if (backward.sqrMagnitude > 0.0001f)
+        {
+            backward.Normalize();
+        }
+
+        var bestPoint = PatrolAreaCenter;
+        var bestScore = float.NegativeInfinity;
+        const int sampleCount = 8;
+        for (var i = 0; i < sampleCount; i++)
+        {
+            var randomX = Random.Range(-halfX, halfX);
+            var randomZ = Random.Range(-halfZ, halfZ);
+            var candidate = new Vector3(PatrolAreaCenter.x + randomX, PatrolAreaCenter.y, PatrolAreaCenter.z + randomZ);
+
+            var toCandidate = candidate - currentPos;
+            toCandidate.y = 0f;
+            var distanceScore = toCandidate.sqrMagnitude;
+            var directionScore = 0f;
+            if (toCandidate.sqrMagnitude > 0.0001f && backward.sqrMagnitude > 0.0001f)
+            {
+                directionScore = Vector3.Dot(toCandidate.normalized, backward);
+            }
+
+            // 优先远距离，同时偏向“当前前方反方向”。
+            var score = distanceScore + directionScore * 6f;
+            if (score <= bestScore)
+            {
+                continue;
+            }
+
+            bestScore = score;
+            bestPoint = candidate;
+        }
+
+        return bestPoint;
     }
 
     public void BeginChaseLock()
@@ -72,6 +109,19 @@ public class Enemy : EnemyControllerBase
     {
         currentStateName = state == null ? "None" : state.GetType().Name;
     }
+    
+    public void OnAnimationEnterEvent(AnimationState playerState)
+    {
+        switch (playerState)
+        {
+        }
+            
+    }
+    public void OnAnimationExitEvent()
+    {
+        stateMachine.ChangeState(stateMachine.idleState);
+    }
+    
 
     private void OnDrawGizmosSelected()
     {

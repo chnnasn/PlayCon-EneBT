@@ -5,6 +5,7 @@ using UnityEngine;
 public class AnimID : MonoBehaviour
 {
     public static readonly int MovementID = Animator.StringToHash("Movement");
+    public static readonly int MoveID = Animator.StringToHash("Move");
     public static readonly int RunID = Animator.StringToHash("Run");
     public static readonly int OffsetID = Animator.StringToHash("Offset");
     public static readonly int HasInputID = Animator.StringToHash("HasInput");

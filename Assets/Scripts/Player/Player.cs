@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections;
 using PlayerState;
 using UnityEngine.InputSystem;
 using FSM;
@@ -17,6 +18,7 @@ using Tools;
         [SerializeField] public PlayerSO playerSO;
 
         [SerializeField] public PlayerCameraUtility playerCameraUtility;
+        [SerializeField] private float startupCameraInputBlockSeconds = 0.15f;
         [Header("Puzzle Summon")]
         private PuzzleManager puzzleManager;
 
@@ -43,10 +45,11 @@ using Tools;
         protected override void Start()
         {
             base.Start();
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
             movementStateMachine.ChangeState(movementStateMachine.idlingState);
             comboStateMachine.ChangeState(comboStateMachine.NullState);
-            
-          
+            StartCoroutine(BlockCameraInputOnStartup());
         }
        protected override void Update()
         {
@@ -64,10 +67,20 @@ using Tools;
         {
             switch (playerState)
             {
-
+                case AnimationState.TurnBack:
+                    movementStateMachine.OnAnimationTranslateEvent(movementStateMachine.returnRunState);
+                    break;
+                case AnimationState.Dash:
+                    movementStateMachine.OnAnimationTranslateEvent(movementStateMachine.dashingState);
+                    comboStateMachine.OnAnimationTranslateEvent(comboStateMachine.NullState);
+                    break;
                 case AnimationState.ATK:
                     comboStateMachine.OnAnimationTranslateEvent(comboStateMachine.ATKIngState);
                     movementStateMachine.OnAnimationTranslateEvent(movementStateMachine.playerMovementNullState);
+                    break;
+                case AnimationState.DashBack:
+                    movementStateMachine.OnAnimationTranslateEvent(movementStateMachine.dashBackingState);
+                    comboStateMachine.OnAnimationTranslateEvent(comboStateMachine.NullState);
                     break;
             }
             
@@ -95,6 +108,7 @@ using Tools;
             movementStateMachine.currentState.OnValueChanged -= MovementStateChanged;
             comboStateMachine.currentState.OnValueChanged -= ComboStateChanged;
             UnregisterPuzzleInputCallbacks();
+            playerCameraUtility.SetInputEnabled(true);
         }
     
 
@@ -219,6 +233,21 @@ using Tools;
         public void SetCurrentEnemy(Enemy enemyTarget)
         {
             currentEnemy = enemyTarget;
+        }
+
+        private IEnumerator BlockCameraInputOnStartup()
+        {
+            playerCameraUtility.SetInputEnabled(false);
+            if (startupCameraInputBlockSeconds > 0f)
+            {
+                yield return new WaitForSeconds(startupCameraInputBlockSeconds);
+            }
+            else
+            {
+                yield return null;
+            }
+
+            playerCameraUtility.SetInputEnabled(true);
         }
 
         private void OnDrawGizmosSelected()

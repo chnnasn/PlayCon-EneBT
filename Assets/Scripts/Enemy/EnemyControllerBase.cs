@@ -93,7 +93,7 @@ public abstract class EnemyControllerBase : ControllerBase
 
     public void SetMovement(float value)
     {
-        SetAnimatorFloatSafe(AnimID.MovementID, value);
+        SetAnimatorFloatSafe(AnimID.MoveID, value);
     }
 
     public void MoveRootMotionTowards(Vector3 worldPoint, float fallbackSpeed)

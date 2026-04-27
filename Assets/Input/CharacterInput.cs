@@ -116,6 +116,15 @@ public partial class @CharacterInput: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": true
+                },
+                {
+                    ""name"": ""Lock"",
+                    ""type"": ""Button"",
+                    ""id"": ""82af8b2e-ff7a-4460-a9ac-c67c66c775de"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -272,6 +281,17 @@ public partial class @CharacterInput: IInputActionCollection2, IDisposable
                     ""action"": ""MousePo"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""e61e3140-51ec-4b0f-9a24-53cd29d4d1c0"",
+                    ""path"": ""<Mouse>/middleButton"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Lock"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
                 }
             ]
         }
@@ -290,6 +310,7 @@ public partial class @CharacterInput: IInputActionCollection2, IDisposable
         m_Player_L_AtK = m_Player.FindAction("L_AtK", throwIfNotFound: true);
         m_Player_Puzzle = m_Player.FindAction("Puzzle", throwIfNotFound: true);
         m_Player_MousePo = m_Player.FindAction("MousePo", throwIfNotFound: true);
+        m_Player_Lock = m_Player.FindAction("Lock", throwIfNotFound: true);
     }
 
     ~@CharacterInput()
@@ -366,6 +387,7 @@ public partial class @CharacterInput: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_L_AtK;
     private readonly InputAction m_Player_Puzzle;
     private readonly InputAction m_Player_MousePo;
+    private readonly InputAction m_Player_Lock;
     public struct PlayerActions
     {
         private @CharacterInput m_Wrapper;
@@ -380,6 +402,7 @@ public partial class @CharacterInput: IInputActionCollection2, IDisposable
         public InputAction @L_AtK => m_Wrapper.m_Player_L_AtK;
         public InputAction @Puzzle => m_Wrapper.m_Player_Puzzle;
         public InputAction @MousePo => m_Wrapper.m_Player_MousePo;
+        public InputAction @Lock => m_Wrapper.m_Player_Lock;
         public InputActionMap Get() { return m_Wrapper.m_Player; }
         public void Enable() { Get().Enable(); }
         public void Disable() { Get().Disable(); }
@@ -419,6 +442,9 @@ public partial class @CharacterInput: IInputActionCollection2, IDisposable
             @MousePo.started += instance.OnMousePo;
             @MousePo.performed += instance.OnMousePo;
             @MousePo.canceled += instance.OnMousePo;
+            @Lock.started += instance.OnLock;
+            @Lock.performed += instance.OnLock;
+            @Lock.canceled += instance.OnLock;
         }
 
         private void UnregisterCallbacks(IPlayerActions instance)
@@ -453,6 +479,9 @@ public partial class @CharacterInput: IInputActionCollection2, IDisposable
             @MousePo.started -= instance.OnMousePo;
             @MousePo.performed -= instance.OnMousePo;
             @MousePo.canceled -= instance.OnMousePo;
+            @Lock.started -= instance.OnLock;
+            @Lock.performed -= instance.OnLock;
+            @Lock.canceled -= instance.OnLock;
         }
 
         public void RemoveCallbacks(IPlayerActions instance)
@@ -482,5 +511,6 @@ public partial class @CharacterInput: IInputActionCollection2, IDisposable
         void OnL_AtK(InputAction.CallbackContext context);
         void OnPuzzle(InputAction.CallbackContext context);
         void OnMousePo(InputAction.CallbackContext context);
+        void OnLock(InputAction.CallbackContext context);
     }
 }

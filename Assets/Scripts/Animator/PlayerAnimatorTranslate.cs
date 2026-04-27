@@ -12,7 +12,8 @@ public  enum AnimationState
     DashBack,
     TurnBack,
     ATK,
-    Null
+    Null,
+    Hit,
 }
 
 public class PlayerAnimatorTranslate : StateMachineBehaviour

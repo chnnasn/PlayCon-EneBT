@@ -86,6 +86,11 @@ public abstract class EnemyControllerBase : ControllerBase
         characterAnimator.SetBool(AnimID.OffsetID, value);
     }
 
+    public void SetBreak(bool value)
+    {
+        characterAnimator.SetBool(AnimID.BreakD, value);
+    }
+
     public void SetLock(float value)
     {
         SetAnimatorFloatSafe(AnimID.LockID, value);

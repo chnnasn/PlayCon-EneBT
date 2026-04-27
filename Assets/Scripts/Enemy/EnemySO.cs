@@ -35,6 +35,12 @@ public class EnemySO : ScriptableObject
     public float idleCrossFade = 0.05f;
     public string moveStartStateName = "WalkStart";
     public float moveStartCrossFade = 0.1f;
+    public string breakStateName = "Hit";
+    public float breakCrossFade = 0.05f;
+
+    [Header("Break Settings")]
+    public float breakDuration = 1f;
+    public float breakDamageTakenMultiplier = 2f;
 
     [Header("Debug")]
     public bool drawScanRays = true;

@@ -13,5 +13,3 @@ MonoBehaviour:
   m_Name: EnemyHealth
   m_EditorClassIdentifier: Assembly-CSharp::CharacterHealthData
   <maxHP>k__BackingField: 4500
-  <maxStrength>k__BackingField: 20
-  <maxDefenseValue>k__BackingField: 250

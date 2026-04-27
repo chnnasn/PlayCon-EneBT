@@ -27,7 +27,5 @@ namespace PlayerState
 
         public bool canMoveInterrupt { get; set; }//可以通过移动打断
         public int executeIndex { get; set; }
-
-        public bool canQTE { get; set; }//触发切人技能特写的条件
     }
 }

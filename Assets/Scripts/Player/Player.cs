@@ -8,14 +8,19 @@ using Tools;
     [RequireComponent(typeof(Animator), typeof(CharacterController))]
     public class Player : ControllerBase
     {
+        private const int MaxLockDetectionHits = 32;
 
         [SerializeField] public string currentMovementState;
 
         [SerializeField] public string currentComboState;
 
         [SerializeField] private Enemy currentEnemy;
+        [SerializeField] private bool isManualEnemyLockActive;
 
         [SerializeField] public PlayerSO playerSO;
+        [Header("Lock Detection")]
+        [SerializeField] private float lockDetectionDistance = 8f;
+        [SerializeField] private LayerMask lockEnemyMask;
 
         [SerializeField] public PlayerCameraUtility playerCameraUtility;
         [SerializeField] private float startupCameraInputBlockSeconds = 0.15f;
@@ -27,6 +32,8 @@ using Tools;
         public PlayerComboStateMachine comboStateMachine { get;private set; }
         public new Transform camera { get; private set; }
         public Enemy CurrentEnemy => currentEnemy;
+        public bool IsManualEnemyLockActive => isManualEnemyLockActive;
+        private readonly Collider[] lockDetectionHits = new Collider[MaxLockDetectionHits];
         
         protected override void Awake()
         {
@@ -130,6 +137,7 @@ using Tools;
             PlayerInputSystem.MainInstance.inputActions.Player.Puzzle.started += OnPuzzleStarted;
             PlayerInputSystem.MainInstance.inputActions.Player.Puzzle.canceled += OnPuzzleCanceled;
             PlayerInputSystem.MainInstance.inputActions.Player.MousePo.performed += OnPuzzlePointerMoved;
+            PlayerInputSystem.MainInstance.inputActions.Player.Lock.started += OnLockStarted;
         }
 
         private void UnregisterPuzzleInputCallbacks()
@@ -140,12 +148,132 @@ using Tools;
             PlayerInputSystem.MainInstance.inputActions.Player.Puzzle.started -= OnPuzzleStarted;
             PlayerInputSystem.MainInstance.inputActions.Player.Puzzle.canceled -= OnPuzzleCanceled;
             PlayerInputSystem.MainInstance.inputActions.Player.MousePo.performed -= OnPuzzlePointerMoved;
+            PlayerInputSystem.MainInstance.inputActions.Player.Lock.started -= OnLockStarted;
+        }
+
+        private void OnLockStarted(InputAction.CallbackContext context)
+        {
+            
+            if (isManualEnemyLockActive)
+            {
+                isManualEnemyLockActive = false;
+                SetCurrentEnemy(null);
+                return;
+            }
+
+            if (!TryDetectEnemyFromForward(out var enemyTarget))
+            {
+                isManualEnemyLockActive = false;
+                SetCurrentEnemy(null);
+                return;
+            }
+
+            isManualEnemyLockActive = true;
+            SetCurrentEnemy(enemyTarget);
+        }
+        
+
+        private bool TryDetectEnemyFromForward(out Enemy enemyTarget)
+        {
+            enemyTarget = null;
+            var enemyMask = GetLockEnemyMask();
+            var effectiveMask = enemyMask.value == 0 ? Physics.AllLayers : enemyMask.value;
+
+            var sourceCamera = camera != null ? camera : Camera.main != null ? Camera.main.transform : null;
+            if (sourceCamera == null)
+            {
+                return false;
+            }
+            var runtimeCamera = sourceCamera.GetComponent<Camera>() ?? Camera.main;
+            if (runtimeCamera == null)
+            {
+                return false;
+            }
+            if (playerSO == null || playerSO.ComboData?.enemyDetectionData == null)
+            {
+                return false;
+            }
+            var detectionData = playerSO.ComboData.enemyDetectionData;
+
+            var detectionOrigin = sourceCamera.position;
+            var detectionDir = sourceCamera.forward;
+            if (detectionDir.sqrMagnitude < 0.0001f)
+            {
+                return false;
+            }
+
+            detectionDir.Normalize();
+            var detectionDistance = Mathf.Max(0.01f, lockDetectionDistance);
+            var detectionRadius = Mathf.Max(0.01f, detectionData.detectionRadius);
+            var overlapCount = Physics.OverlapSphereNonAlloc(
+                detectionOrigin + detectionDir * detectionDistance * 0.5f,
+                detectionDistance * 0.5f + detectionRadius,
+                lockDetectionHits,
+                effectiveMask,
+                QueryTriggerInteraction.Ignore);
+
+            Enemy bestEnemy = null;
+            var bestDepth = float.MaxValue;
+            for (var i = 0; i < overlapCount; i++)
+            {
+                var hitCollider = lockDetectionHits[i];
+                if (hitCollider == null)
+                {
+                    continue;
+                }
+
+                var candidateEnemy = hitCollider.GetComponentInParent<Enemy>();
+                if (candidateEnemy == null)
+                {
+                    continue;
+                }
+
+                var candidatePos = candidateEnemy.transform.position + Vector3.up * 1f;
+                var viewport = runtimeCamera.WorldToViewportPoint(candidatePos);
+
+                if (viewport.z <= 0f)
+                {
+                    continue;
+                }
+
+                if (viewport.x < 0f || viewport.x > 1f || viewport.y < 0f || viewport.y > 1f)
+                {
+                    continue;
+                }
+
+                if (viewport.z >= bestDepth)
+                {
+                    continue;
+                }
+
+                bestDepth = viewport.z;
+                bestEnemy = candidateEnemy;
+            }
+
+            for (var i = 0; i < overlapCount; i++)
+            {
+                lockDetectionHits[i] = null;
+            }
+
+            enemyTarget = bestEnemy;
+            return enemyTarget != null;
         }
 
         private void OnPuzzleStarted(InputAction.CallbackContext context)
         {
             if (puzzleManager == null)
                 return;
+            if (Mouse.current == null || !Mouse.current.rightButton.wasPressedThisFrame)
+                return;
+
+            if (!CanShowPuzzleByFrontArea())
+            {
+                puzzleManager.SetPuzzleVisible(false);
+                return;
+            }
+            
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
             
             puzzleManager.EnsurePuzzleSession();
 
@@ -153,6 +281,11 @@ using Tools;
 
             if (PlayerInputSystem.MainInstance.TryGetPointerPosition(out var beginPointerPosition))
                 puzzleManager.BeginDraw(beginPointerPosition);
+        }
+
+        private bool CanShowPuzzleByFrontArea()
+        {
+            return currentEnemy != null;
         }
 
         private void OnPuzzlePointerMoved(InputAction.CallbackContext context)
@@ -167,8 +300,16 @@ using Tools;
 
         private void OnPuzzleCanceled(InputAction.CallbackContext context)
         {
+            
+            Cursor.visible = false;
+            Cursor.lockState = CursorLockMode.Locked;
+            
+            var solved = puzzleManager.EndDraw();
+            if (solved && currentEnemy != null)
+            {
+                GameEventsManager.MainInstance.CallEvent(HealthState.BrokenDefense.ToString(), currentEnemy.transform);
+            }
 
-            puzzleManager.EndDraw();
             puzzleManager.SetPuzzleVisible(false);
         }
 
@@ -252,11 +393,76 @@ using Tools;
 
         private void OnDrawGizmosSelected()
         {
+            DrawLockDetectionGizmos();
+
             if (comboStateMachine == null || comboStateMachine.ATKIngState == null)
             {
                 return;
             }
 
             comboStateMachine.ATKIngState.DrawEnemyDetectionGizmos();
+        }
+
+        private void DrawLockDetectionGizmos()
+        {
+            var sourceCamera = camera != null ? camera : Camera.main != null ? Camera.main.transform : null;
+            if (sourceCamera == null)
+            {
+                return;
+            }
+
+            var runtimeCamera = sourceCamera.GetComponent<Camera>() ?? Camera.main;
+            if (runtimeCamera == null)
+            {
+                return;
+            }
+
+            if (playerSO == null || playerSO.ComboData?.enemyDetectionData == null)
+            {
+                return;
+            }
+
+            var detectionData = playerSO.ComboData.enemyDetectionData;
+            var direction = sourceCamera.forward;
+            if (direction.sqrMagnitude < 0.0001f)
+            {
+                return;
+            }
+
+            direction.Normalize();
+            var distance = Mathf.Max(0.01f, lockDetectionDistance);
+            var radius = Mathf.Max(0.01f, detectionData.detectionRadius);
+            var origin = sourceCamera.position;
+            var endPoint = origin + direction * distance;
+            var overlapCenter = origin + direction * (distance * 0.5f);
+            var overlapRadius = distance * 0.5f + radius;
+
+            Gizmos.color = new Color(0.2f, 0.9f, 1f, 0.9f);
+            Gizmos.DrawLine(origin, endPoint);
+            Gizmos.DrawWireSphere(endPoint, radius);
+
+            Gizmos.color = new Color(1f, 0.7f, 0.2f, 0.55f);
+            var cachedMatrix = Gizmos.matrix;
+            Gizmos.matrix = Matrix4x4.TRS(origin, sourceCamera.rotation, Vector3.one);
+            Gizmos.DrawFrustum(Vector3.zero, runtimeCamera.fieldOfView, distance, 0.1f, runtimeCamera.aspect);
+            Gizmos.matrix = cachedMatrix;
+
+            Gizmos.color = new Color(0.8f, 0.4f, 1f, 0.45f);
+            Gizmos.DrawWireSphere(overlapCenter, overlapRadius);
+        }
+
+        private LayerMask GetLockEnemyMask()
+        {
+            if (lockEnemyMask.value != 0)
+            {
+                return lockEnemyMask;
+            }
+
+            if (playerSO != null && playerSO.ComboData?.enemyDetectionData != null)
+            {
+                return playerSO.ComboData.enemyDetectionData.WhatIsEnemy;
+            }
+
+            return default;
         }
     }

@@ -7,6 +7,7 @@ public class EnemyStateMachine : StateMachine
     public EnemyPatrolState patrolState { get; }
     public EnemyAlertState alertState { get; }
     public EnemyChaseState chaseState { get; }
+    public EnemyBreakState breakState { get; }
 
     public EnemyStateMachine(Enemy enemyController)
     {
@@ -15,5 +16,6 @@ public class EnemyStateMachine : StateMachine
         patrolState = new EnemyPatrolState(this);
         alertState = new EnemyAlertState(this);
         chaseState = new EnemyChaseState(this);
+        breakState = new EnemyBreakState(this);
     }
 }

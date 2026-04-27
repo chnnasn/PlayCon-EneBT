@@ -8,21 +8,7 @@ public class EnemyAnimatorTranslate : StateMachineBehaviour
 {
     Enemy enemy;
 
-    [SerializeField] public  AnimationState onEnterAnimationState;
-        
-    override public void OnStateEnter(Animator animator, AnimatorStateInfo stateInfo, int layerIndex)
-    {
-        
-        if (onEnterAnimationState == AnimationState.Null)
-        {
-            return;
-        }
-
-        if (animator.TryGetComponent<Enemy>(out enemy))
-        {
-            enemy.OnAnimationEnterEvent(onEnterAnimationState);
-        }
-    }
+    [SerializeField] public  AnimationState onAnimationState;
 
 
     override public void OnStateExit(Animator animator, AnimatorStateInfo stateInfo, int layerIndex)
@@ -30,7 +16,7 @@ public class EnemyAnimatorTranslate : StateMachineBehaviour
         
         if (animator.TryGetComponent<Enemy>(out enemy))
         {
-            enemy.OnAnimationExitEvent();
+            enemy.OnAnimationExitEvent(onAnimationState);
         }
     }
     

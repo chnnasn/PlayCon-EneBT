@@ -5,30 +5,7 @@ public class EnemyHeath : CharacterHealthBase
     protected override void CharacterHitAction(float damage, string hitName, string parryName)
     {
         base.CharacterHitAction(damage, hitName, parryName);
-        if (healthInfo.hasStrength.Value)//格挡
-        {
-            healthInfo.TakeStrength(damage);
-            animator.CrossFadeInFixedTime(parryName, 0.1f, 0);
-            
-        }
-        else//挨打
-        {
-         
-            healthInfo.TakeDamage(damage);
-            animator.CrossFadeInFixedTime(hitName, 0.1f, 0);
-        }
-        healthInfo.TakeDefenseValue(damage);
-    }
-    /// 处理敌人的破防逻辑   
-    protected override void OnUpdateDefenseValue(float value)
-    {
-        base.OnUpdateDefenseValue(value);
-        if (currentEnemy == null) { return; }
-        if (value <= 0)
-        {
-            GameEventsManager.MainInstance.CallEvent("达到QTE条件", currentEnemy);
-            healthInfo.ReDefenseValue();
-            return;
-        }
+        // 韧性/防御已移除：受击只做表现，实际扣血在基类事件链路里统一处理。
+        animator.CrossFadeInFixedTime(hitName, 0.1f, 0);
     }
 }

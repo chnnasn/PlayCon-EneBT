@@ -5,11 +5,13 @@ public class Enemy : EnemyControllerBase
 {
     [Header("Debug")]
     [SerializeField] private string currentStateName;
+    [SerializeField] private float damageTakenMultiplier = 1f;
 
     public EnemyStateMachine stateMachine { get; private set; }
     public Vector3 PatrolAreaCenter { get; private set; }
     public Transform ChaseTarget { get; private set; }
     public bool HasChaseLock => ChaseTarget != null;
+    public float DamageTakenMultiplier => damageTakenMultiplier;
 
     protected override void Awake()
     {
@@ -77,12 +79,39 @@ public class Enemy : EnemyControllerBase
 
     public void BeginChaseLock()
     {
-        ChaseTarget = target;
+        BeginChaseLock(target);
+    }
+
+    public void BeginChaseLock(Transform chaseTarget)
+    {
+        target = chaseTarget;
+        ChaseTarget = chaseTarget;
     }
 
     public void EndChaseLock()
     {
         ChaseTarget = null;
+    }
+
+    public void SetDamageTakenMultiplier(float value)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value))
+        {
+            damageTakenMultiplier = 1f;
+            return;
+        }
+
+        damageTakenMultiplier = Mathf.Max(0f, value);
+    }
+
+    public void EnterBreakState()
+    {
+        if (stateMachine == null)
+        {
+            return;
+        }
+
+        stateMachine.ChangeState(stateMachine.breakState);
     }
 
     private void OnEnable()
@@ -94,7 +123,7 @@ public class Enemy : EnemyControllerBase
 
         stateMachine.currentState.OnValueChanged += HandleStateChanged;
     }
-
+    
     private void OnDisable()
     {
         if (stateMachine == null)
@@ -105,21 +134,38 @@ public class Enemy : EnemyControllerBase
         stateMachine.currentState.OnValueChanged -= HandleStateChanged;
     }
 
+
     private void HandleStateChanged(IState state)
     {
         currentStateName = state == null ? "None" : state.GetType().Name;
     }
     
-    public void OnAnimationEnterEvent(AnimationState playerState)
+    public void OnAnimationExitEvent(AnimationState playerState)
     {
         switch (playerState)
         {
+            case AnimationState.Idle:
+                stateMachine.ChangeState(stateMachine.idleState);
+                break;
+            case AnimationState.Hit:
+                if (stateMachine.currentState.Value != stateMachine.breakState)
+                {
+                    var player = FindObjectOfType<Player>();
+                    if (player == null)
+                    {
+                        break;
+                    }
+
+                    target = player.transform;
+                    BeginChaseLock();
+                    stateMachine.ChangeState(stateMachine.chaseState);
+                }
+                else
+                {
+                    
+                }
+                break;
         }
-            
-    }
-    public void OnAnimationExitEvent()
-    {
-        stateMachine.ChangeState(stateMachine.idleState);
     }
     
 

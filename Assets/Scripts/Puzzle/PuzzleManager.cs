@@ -84,10 +84,10 @@ public class PuzzleManager : MonoBehaviour
             TryExtendOrBacktrack(hoverCell);
     }
 
-    public void EndDraw()
+    public bool EndDraw()
     {
         if (!_isDrawing || !IsPuzzleSessionActive || puzzle == null)
-            return;
+            return false;
 
         OrderlyScene.MainInstance.OneStrokeTimedOut -= OnOneStrokeTimedOut;
 
@@ -96,10 +96,8 @@ public class PuzzleManager : MonoBehaviour
         {
             puzzle.SetSolved(true);
             OrderlyScene.MainInstance.CancelOneStroke();
-            Debug.Log("战斗一笔画成功");
-
             EndPuzzleSession();
-            return;
+            return true;
         }
         
         OrderlyScene.MainInstance.CancelOneStroke();
@@ -108,6 +106,7 @@ public class PuzzleManager : MonoBehaviour
 
         _drawnPath.Clear();
         _entryDirForConstrained.Clear();
+        return false;
     }
 
 

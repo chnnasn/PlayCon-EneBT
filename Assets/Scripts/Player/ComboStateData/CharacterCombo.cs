@@ -105,9 +105,14 @@ namespace PlayerState
         }
         public void UpdateEnemy()
         {
-            if (player.CurrentEnemy != null && Time.time > enemyLockExpireTime)
+            if (!player.IsManualEnemyLockActive && player.CurrentEnemy != null && Time.time > enemyLockExpireTime)
             {
                 player.SetCurrentEnemy(null);
+            }
+
+            if (player.IsManualEnemyLockActive)
+            {
+                return;
             }
 
             // 仅在攻击相关动画期间检测目标，避免非战斗时持续扫描。

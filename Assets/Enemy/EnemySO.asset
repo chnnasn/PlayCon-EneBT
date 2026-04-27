@@ -37,5 +37,9 @@ MonoBehaviour:
   idleCrossFade: 0.05
   moveStartStateName: WalkStart
   moveStartCrossFade: 0.1
+  breakStateName: BrokenDefense
+  breakCrossFade: 0.05
+  breakDuration: 10
+  breakDamageTakenMultiplier: 2
   drawScanRays: 1
   scanRayCount: 7

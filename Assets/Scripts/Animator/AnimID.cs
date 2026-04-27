@@ -12,5 +12,6 @@ public class AnimID : MonoBehaviour
     public static readonly int LockID = Animator.StringToHash("Lock");
     public static readonly int AimID = Animator.StringToHash("Aim");
     public static readonly int TurnBackID = Animator.StringToHash("TurnBack");
+    public static readonly int BreakD = Animator.StringToHash("Break");
 
 }

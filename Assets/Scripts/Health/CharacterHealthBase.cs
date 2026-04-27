@@ -8,13 +8,12 @@ public enum HealthState
 {
     TriggerDamage,
     GenerateDamage,
+    BrokenDefense,
 }
 
 public class CharacterHealthBase : MonoBehaviour
 {
     [SerializeField] private float currentHP;
-    [SerializeField] private float currentStrength;
-    [SerializeField] private float currentDefenseValue;
     protected Transform currentEnemy;
     [SerializeField]protected CharacterHealthInfo characterHealthInfo;
     protected CharacterHealthInfo healthInfo;
@@ -27,8 +26,6 @@ public class CharacterHealthBase : MonoBehaviour
         healthInfo=Instantiate(characterHealthInfo);
 
         healthInfo.currentHP.OnValueChanged += OnUpdatePH;
-        healthInfo.currentStrength.OnValueChanged += OnUpdateStrength;
-        healthInfo.currentDefenseValue.OnValueChanged += OnUpdateDefenseValue;
     }
 
  
@@ -48,6 +45,7 @@ public class CharacterHealthBase : MonoBehaviour
         {
             GameEventsManager.MainInstance.AddEventListening<float, string, string, Transform, Transform, CharacterComboBase>(HealthState.TriggerDamage.ToString(), OnCharacterHitEventHandler);
             GameEventsManager.MainInstance.AddEventListening<float>(HealthState.GenerateDamage.ToString(), OnCharacterDamageAction);
+            GameEventsManager.MainInstance.AddEventListening<Transform>(HealthState.BrokenDefense.ToString(), OnBrokenDefenseEvent);
         }
 
     }
@@ -60,6 +58,7 @@ public class CharacterHealthBase : MonoBehaviour
         {
             GameEventsManager.MainInstance.ReMoveEvent<float, string, string, Transform, Transform, CharacterComboBase>(HealthState.TriggerDamage.ToString(), OnCharacterHitEventHandler);
             GameEventsManager.MainInstance.ReMoveEvent<float>(HealthState.GenerateDamage.ToString(), OnCharacterDamageAction);
+            GameEventsManager.MainInstance.ReMoveEvent<Transform>(HealthState.BrokenDefense.ToString(), OnBrokenDefenseEvent);
         }
 
         if (healthInfo == null)
@@ -68,17 +67,34 @@ public class CharacterHealthBase : MonoBehaviour
         }
 
         healthInfo.currentHP.OnValueChanged -= OnUpdatePH;
-        healthInfo.currentStrength.OnValueChanged -= OnUpdateStrength;
-        healthInfo.currentDefenseValue.OnValueChanged -= OnUpdateDefenseValue;
 
     }
 
-  
+    private void OnBrokenDefenseEvent(Transform bearer)
+    {
+        if (bearer != transform)
+        {
+            return;
+        }
+
+        EnterBreakState();
+    }
+
+    protected virtual void EnterBreakState()
+    {
+        // 仅对敌人生效：进入破防状态（停行动、播放破防动画、易伤等）。
+        if (TryGetComponent<Enemy>(out var enemy))
+        {
+            enemy.EnterBreakState();
+        }
+    }
+
     //事件注册
     private void OnCharacterHitEventHandler(float Damage, string HitName, string ParryName, Transform Attacker, Transform Bearer, CharacterComboBase characterCombo)
     {
       
         if (Bearer != this.transform) { return; }
+        Damage *= GetDamageTakenMultiplier();
         SetEnemy(Attacker);
         CharacterHitAction(Damage, HitName, ParryName);
         OnCharacterDamageAction(Damage);
@@ -89,14 +105,28 @@ public class CharacterHealthBase : MonoBehaviour
     {
         healthInfo.TakeDamage(damage);
     }
-    protected void CharacterStrengthAction(float damage)
-    {
-        healthInfo.TakeStrength(damage);
-    }
 
     protected virtual void CharacterHitAction(float damage, string hitName, string parryName)
     {
         
+    }
+
+    protected virtual float GetDamageTakenMultiplier()
+    {
+        if (TryGetComponent<Enemy>(out var enemy))
+        {
+            // 非破防：只吃 20% 伤害；破防：吃满额伤害。
+            var baseMultiplier = 0.2f;
+            var machine = enemy.stateMachine;
+            if (machine != null && machine.currentState.Value == machine.breakState)
+            {
+                baseMultiplier = 1f;
+            }
+
+            return baseMultiplier * enemy.DamageTakenMultiplier;
+        }
+
+        return 1f;
     }
 
     protected virtual void SetEnemy(Transform attacker)
@@ -135,20 +165,6 @@ public class CharacterHealthBase : MonoBehaviour
         healthInfo.onDead.Value = true;
 
 
-    }
-    private void OnUpdateStrength(float value)
-    {
-        currentStrength = value;
-        if (value > 0)
-        {
-            healthInfo.hasStrength.Value = true;
-            return;
-        }
-        healthInfo.hasStrength.Value = false;
-    }
-    protected virtual void OnUpdateDefenseValue(float value)
-    {
-        currentDefenseValue = value;
     }
 
     private void LateUpdate()

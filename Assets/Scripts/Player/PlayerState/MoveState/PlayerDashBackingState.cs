@@ -28,7 +28,7 @@ namespace FSM
                 base.Update();
             }
         }
-        #region Dash转到 Idle?Run
+        #region Dash转到 Idle或Run
         public override void OnAnimationExitEvent()
         {
             if (PlayerInputSystem.MainInstance.PlayerMove == Vector2.zero)

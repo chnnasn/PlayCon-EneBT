@@ -5,7 +5,6 @@ namespace FSM
 {
     public class PlayerNullState : PlayerComboState
     {
-        //如果父类实现了带参的构造函数，那么子类也要实现一个赋值调用给父类的构造函数
         public PlayerNullState(PlayerComboStateMachine comboStateMachine ) : base(comboStateMachine)
         {
         }

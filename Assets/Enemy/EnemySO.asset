@@ -23,7 +23,7 @@ MonoBehaviour:
   eyeHeight: 0
   rotationTime: 1.37
   patrolSpeed: 1
-  chaseSpeed: 2
+  chaseSpeed: 2.8
   arriveDistance: 1
   patrolWaitTime: 2
   alertDuration: 2.9

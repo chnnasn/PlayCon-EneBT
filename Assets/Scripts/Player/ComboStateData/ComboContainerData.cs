@@ -16,7 +16,6 @@ namespace PlayerState
     {
 
         if (comboDates.Count == 0) { return; }
-        //缓存第一个连招
         firstComboData = comboDates[0];
         Debug.Log("初始化");
     }
@@ -32,11 +31,6 @@ namespace PlayerState
     { 
         if (DodgeATKData==null) { return; }
         comboDates[0]= DodgeATKData;
-    }
-    public void SwitchBackDodgeATK()
-    {
-        if (BackDodgeATKData == null) { return; }
-        comboDates[0] = BackDodgeATKData;
     }
     public void ResetComboDates()
     {
@@ -80,21 +74,11 @@ namespace PlayerState
         return comboDates[index].comboDamage;
     }
 
-    /*public SoundStyle GetComboSoundStyle(int index)
-    {
-      
-        if (comboDates[index].comboDamage == 0) { Debug.LogWarning(index + "的索引值下没有设置音效Style"); }
-        return comboDates[index].universalSound;
-    }*/
-
     public float GetComboShakeForce(int index, int ATKIndex)
     {
-        //  Debug.Log("ATKIndex为" + ATKIndex);
-        // Debug.Log("comboDates[index].shakeForce.Length为" + (comboDates[index].shakeForce.Length ));
       
         if (comboDates[index].shakeForce == null||ATKIndex > comboDates[index].shakeForce.Length )
         {
-         //说明我不设置Force或者没有设置全Force，代表每该ATK都没有震屏
             return 0;
         }
         return comboDates[index].shakeForce[ATKIndex-1];

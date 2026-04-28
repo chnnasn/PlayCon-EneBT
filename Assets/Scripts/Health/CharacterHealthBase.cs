@@ -82,7 +82,7 @@ public class CharacterHealthBase : MonoBehaviour
 
     protected virtual void EnterBreakState()
     {
-        // 仅对敌人生效：进入破防状态（停行动、播放破防动画、易伤等）。
+        // 仅对敌人生效：进入破防状态
         if (TryGetComponent<Enemy>(out var enemy))
         {
             enemy.EnterBreakState();

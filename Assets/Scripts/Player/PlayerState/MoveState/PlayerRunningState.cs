@@ -55,9 +55,7 @@ namespace FSM
         }
         private void OnKeepRunning(InputAction.CallbackContext context)
         {
-            //注销原来的计时器
             TimerManager.MainInstance.UnregisterTimer(gameTimer);
-            //播发动画
             animator.CrossFadeInFixedTime("WalkStart", 0.14f);
         }
 

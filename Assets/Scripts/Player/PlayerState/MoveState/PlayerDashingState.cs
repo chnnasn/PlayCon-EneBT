@@ -29,7 +29,7 @@ namespace FSM
         }
    
    
-        #region Dash转到 Idle?Sprint
+        #region Dash转到 Idle或Sprint
         public override void OnAnimationExitEvent()
         {
             if (PlayerInputSystem.MainInstance.PlayerMove == Vector2.zero)

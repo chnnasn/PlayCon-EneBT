@@ -17,7 +17,7 @@ namespace PlayerState
            
         }
 
-        #region ??A????
+        #region 闪A处理
        
 
         public  void DodgeComboInput()
@@ -28,12 +28,9 @@ namespace PlayerState
         #endregion
         
 
-        #region ???????
-
-        /// <summary>
-        /// ????????
-        /// </summary>
-        /// <returns></returns>
+        #region 技能处理
+        
+        /// 主动技能
         public bool CanFinishSkillInput()
         {
             if (animator.AnimationAtTag("Skill")) { return false; }
@@ -56,10 +53,8 @@ namespace PlayerState
             return true;
 
         }
-
-        /// <summary>
-        /// ???????
-        /// </summary>
+        
+        /// 终极大招
         public void FinishSkillInput()
         {
             if (comboData.finishSkillCombo == null) { return; }
@@ -69,9 +64,7 @@ namespace PlayerState
             }
             ExecuteSkill();
         }
-        /// <summary>
-        /// ????
-        /// </summary>
+        /// 大招
         public void SkillInput()
         {
             if (comboData.skillCombo == null) { return; }
@@ -81,26 +74,23 @@ namespace PlayerState
             }
             ExecuteSkill();
         }
-       
-        /// <summary>
-        /// ???????
-        /// </summary>
+        
+        /// 执行大招
         private void ExecuteSkill()
         {
             ReSetATKIndex(0);
-            //????????
+            //播放语音
             PlayCharacterVoice(reusableData.currentSkill);
-            //????????????
+            //播放武器音效
             PlayWeaponSound(reusableData.currentSkill);
             animator.CrossFadeInFixedTime(reusableData.currentSkill.comboName, 0.1f);
         }
         
         #endregion
 
-        #region ??????
+        #region 敌人检测
         public void UpdateDetectionDir()
         {
-            // ????????????????????????
             reusableData.detectionDir = playerTransform.forward;
         }
         public void UpdateEnemy()

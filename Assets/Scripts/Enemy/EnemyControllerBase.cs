@@ -4,8 +4,8 @@ using Tools;
 [RequireComponent(typeof(CharacterController))]
 public abstract class EnemyControllerBase : ControllerBase
 {
-    private const int MaxScanTargets = 16;
-    private const float FacingSnapEpsilonDegrees = 0.5f;
+    private const int maxScanTargets = 16;
+    private const float facingSnapEpsilonDegrees = 0.5f;
 
     [Header("Data")]
     [SerializeField] protected EnemySO enemySO;
@@ -17,7 +17,7 @@ public abstract class EnemyControllerBase : ControllerBase
     public Transform Target => target;
     public EnemySO Data => enemySO;
 
-    private readonly Collider[] scanHits = new Collider[MaxScanTargets];
+    private readonly Collider[] scanHits = new Collider[maxScanTargets];
     private float lastRootMotionSqr;
 
     protected override void Awake()
@@ -44,18 +44,7 @@ public abstract class EnemyControllerBase : ControllerBase
 
         characterController.Move(direction.normalized * speed * Time.deltaTime);
     }
-
-    public void MoveToTarget(Vector3 worldPoint, float speed)
-    {
-        var flatDirection = worldPoint - transform.position;
-        flatDirection.y = 0f;
-        if (flatDirection.sqrMagnitude < 0.0001f)
-        {
-            return;
-        }
-
-        MoveInDirection(flatDirection.normalized, speed);
-    }
+    
 
     public void FaceTargetThenMove(Vector3 worldPoint, float speed)
     {
@@ -93,12 +82,12 @@ public abstract class EnemyControllerBase : ControllerBase
 
     public void SetLock(float value)
     {
-        SetAnimatorFloatSafe(AnimID.LockID, value);
+        SetAnimatorFloat(AnimID.LockID, value);
     }
 
     public void SetMovement(float value)
     {
-        SetAnimatorFloatSafe(AnimID.MoveID, value);
+        SetAnimatorFloat(AnimID.MoveID, value);
     }
 
     public void MoveRootMotionTowards(Vector3 worldPoint, float fallbackSpeed)
@@ -134,7 +123,7 @@ public abstract class EnemyControllerBase : ControllerBase
         if (flat.sqrMagnitude > 0.0001f)
         {
             var desired = Quaternion.LookRotation(flat.normalized);
-            if (Quaternion.Angle(transform.rotation, desired) <= FacingSnapEpsilonDegrees)
+            if (Quaternion.Angle(transform.rotation, desired) <= facingSnapEpsilonDegrees)
             {
                 transform.rotation = desired;
             }
@@ -230,11 +219,10 @@ public abstract class EnemyControllerBase : ControllerBase
 
     protected override void OnAnimatorMove()
     {
-        // Root motion is always active; state classes decide behavior.
         base.OnAnimatorMove();
     }
 
-    private void SetAnimatorFloatSafe(int parameterId, float value)
+    private void SetAnimatorFloat(int parameterId, float value)
     {
         if (float.IsNaN(value) || float.IsInfinity(value))
         {

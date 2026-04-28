@@ -1,28 +1,35 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class PuzzleManager : MonoBehaviour
 {
     private Puzzle puzzle;
+    public event Action<bool> OneDrawingChanged;
+    public event Action OneStrokeTimedOut;
 
-    private readonly HashSet<Vector2Int> _requiredPoints = new();
-    private readonly List<Vector2Int> _drawnPath = new();
-    private readonly Dictionary<Vector2Int, Vector2Int> _entryDirForConstrained = new();
+    private readonly HashSet<Vector2Int> requiredPoints = new();
+    private readonly List<Vector2Int> Path = new();
+    private readonly Dictionary<Vector2Int, Vector2Int> Constrained = new();
 
-    private bool _isDrawing;
+    private bool isDrawing;
 
     [Header("Puzzle generation params")]
     [SerializeField][Range(3, 4)] private int maxSize = 3;
     [SerializeField][Range(2, 4)] private int nodeNum = 3;
 
     [Header("Combat one-stroke time limit")]
-    [SerializeField][Range(3, 10)] private float timeLimitSeconds = 10f;
+    [SerializeField][Range(3, 10)] private float TimeSeconds = 10f;
+
+    [Header("Puzzle cooldown")]
+    [SerializeField][Min(0f)] private float CooldownSeconds = 1f;
+    private float nextAllowedTime;
     
     
     void OnDisable()
     {
             if (OrderlyScene.TryGetExistingInstance(out var orderly))
-                orderly.OneStrokeTimedOut -= OnOneStrokeTimedOut;
+                orderly.OneStrokeTimedOut -= OnStrokeTimedOut;
     }
 
     void Start()
@@ -30,10 +37,10 @@ public class PuzzleManager : MonoBehaviour
         if (puzzle == null)
             puzzle = GetComponent<Puzzle>();
         
-        _isDrawing = false;
+        isDrawing = false;
     }
     
-    public bool IsPuzzleSessionActive => _requiredPoints.Count > 0;
+    public bool IsPuzzleSession => requiredPoints.Count > 0;
 
     
     public void SetPuzzleVisible(bool visible)
@@ -43,13 +50,23 @@ public class PuzzleManager : MonoBehaviour
 
     public void EnsurePuzzleSession()
     {
-        if (!IsPuzzleSessionActive)
-            BeginPuzzleSession();
+        if (!IsPuzzleSession)
+            BeginPuzzle();
+    }
+
+    public void CancelPuzzleSession(bool hideUi = true)
+    {
+        if (hideUi)
+        {
+            SetPuzzleVisible(false);
+        }
+
+        EndPuzzleSession();
     }
 
     public void BeginDraw(Vector2 pointerPosition)
     {
-        if (puzzle == null || puzzle.IsSolved || !IsPuzzleSessionActive)
+        if (puzzle == null || puzzle.IsSolved || !IsPuzzleSession)
             return;
         
         if (puzzle.TryGetCellScreenPosition(puzzle.StartCell, out var startScreenPos))
@@ -58,17 +75,18 @@ public class PuzzleManager : MonoBehaviour
             pointerPosition = startScreenPos;
         }
 
-        _isDrawing = true;
-        _drawnPath.Clear();
-        _entryDirForConstrained.Clear();
-        _drawnPath.Add(puzzle.StartCell);
-        puzzle.RefreshVisuals(_drawnPath);
+        isDrawing = true;
+        Path.Clear();
+        Constrained.Clear();
+        Path.Add(puzzle.StartCell);
+        puzzle.RefreshVisuals(Path);
+        OneDrawingChanged?.Invoke(true);
 
-        if (timeLimitSeconds > 0f)
+        if (TimeSeconds > 0f)
         {
             var orderly = OrderlyScene.MainInstance;
-            orderly.OneStrokeTimedOut += OnOneStrokeTimedOut;
-            orderly.BeginOneStrokeWithTimeLimit(timeLimitSeconds);
+            orderly.OneStrokeTimedOut += OnStrokeTimedOut;
+            orderly.BeginOneStrokeWithTimeLimit(TimeSeconds);
         }
 
         if (puzzle.TryGetCellFromScreen(pointerPosition, out var hoverCell))
@@ -77,7 +95,7 @@ public class PuzzleManager : MonoBehaviour
 
     public void ContinueDraw(Vector2 pointerPosition)
     {
-        if (!_isDrawing || !IsPuzzleSessionActive || puzzle == null || puzzle.IsSolved)
+        if (!isDrawing || !IsPuzzleSession || puzzle == null || puzzle.IsSolved)
             return;
 
         if (puzzle.TryGetCellFromScreen(pointerPosition, out var hoverCell))
@@ -86,12 +104,13 @@ public class PuzzleManager : MonoBehaviour
 
     public bool EndDraw()
     {
-        if (!_isDrawing || !IsPuzzleSessionActive || puzzle == null)
+        if (!isDrawing || !IsPuzzleSession || puzzle == null)
             return false;
 
-        OrderlyScene.MainInstance.OneStrokeTimedOut -= OnOneStrokeTimedOut;
+        OrderlyScene.MainInstance.OneStrokeTimedOut -= OnStrokeTimedOut;
 
-        _isDrawing = false;
+        isDrawing = false;
+        OneDrawingChanged?.Invoke(false);
         if (IsSolvedPath())
         {
             puzzle.SetSolved(true);
@@ -104,30 +123,43 @@ public class PuzzleManager : MonoBehaviour
         Debug.Log("战斗一笔画中断：重置倒计时");
 
 
-        _drawnPath.Clear();
-        _entryDirForConstrained.Clear();
+        Path.Clear();
+        Constrained.Clear();
         return false;
     }
 
 
-    private void OnOneStrokeTimedOut()
+    private void OnStrokeTimedOut()
     {
         Debug.Log("战斗一笔画失败：超时");
         SetPuzzleVisible(false);
         
+        if (isDrawing)
+        {
+            isDrawing = false;
+            OneDrawingChanged?.Invoke(false);
+        }
+
+        OneStrokeTimedOut?.Invoke();
+        
         EndPuzzleSession();
     }
 
-    public void BeginPuzzleSession()
+    public void BeginPuzzle()
     {
-        _isDrawing = false;
-        _requiredPoints.Clear();
-        _drawnPath.Clear();
-        _entryDirForConstrained.Clear();
+        if (Time.time < nextAllowedTime)
+        {
+            return;
+        }
+
+        isDrawing = false;
+        requiredPoints.Clear();
+        Path.Clear();
+        Constrained.Clear();
         
         if (OrderlyScene.TryGetExistingInstance(out var orderly))
         {
-            orderly.OneStrokeTimedOut -= OnOneStrokeTimedOut;
+            orderly.OneStrokeTimedOut -= OnStrokeTimedOut;
             orderly.CancelOneStroke();
         }
 
@@ -136,7 +168,7 @@ public class PuzzleManager : MonoBehaviour
             puzzle.SetSolved(false);
             puzzle.Initialize(maxSize, nodeNum);
             BuildRequiredPoints();
-            puzzle.RefreshVisuals(_drawnPath);
+            puzzle.RefreshVisuals(Path);
         }
 
         Debug.Log("召唤战斗一笔画谜题");
@@ -144,17 +176,20 @@ public class PuzzleManager : MonoBehaviour
 
     private void EndPuzzleSession()
     {
+        nextAllowedTime = Time.time + Mathf.Max(0f, CooldownSeconds);
+
         if (OrderlyScene.TryGetExistingInstance(out var orderly))
         {
-            orderly.OneStrokeTimedOut -= OnOneStrokeTimedOut;
+            orderly.OneStrokeTimedOut -= OnStrokeTimedOut;
             orderly.CancelOneStroke();
         }
 
-        _isDrawing = false;
-        _requiredPoints.Clear();
-        _drawnPath.Clear();
-        _entryDirForConstrained.Clear();
-        puzzle?.RefreshVisuals(_drawnPath);
+        isDrawing = false;
+        requiredPoints.Clear();
+        Path.Clear();
+        Constrained.Clear();
+        puzzle?.RefreshVisuals(Path);
+        OneDrawingChanged?.Invoke(false);
     }
 
     void BuildRequiredPoints()
@@ -162,13 +197,13 @@ public class PuzzleManager : MonoBehaviour
         if (puzzle == null || !puzzle.IsGenerated)
             return;
 
-        _requiredPoints.Clear();
-        _drawnPath.Clear();
-        _entryDirForConstrained.Clear();
-        _isDrawing = false;
+        requiredPoints.Clear();
+        Path.Clear();
+        Constrained.Clear();
+        isDrawing = false;
 
-        _requiredPoints.Add(puzzle.StartCell);
-        _requiredPoints.Add(puzzle.EndCell);
+        requiredPoints.Add(puzzle.StartCell);
+        requiredPoints.Add(puzzle.EndCell);
 
         for (int x = 0; x < puzzle.Size; x++)
         {
@@ -177,31 +212,31 @@ public class PuzzleManager : MonoBehaviour
                 var cell = new Vector2Int(x, y);
                 var type = puzzle.GetCellType(cell);
                 if (type == TileType.MiddleType2 || type == TileType.MiddleType3)
-                    _requiredPoints.Add(cell);
+                    requiredPoints.Add(cell);
             }
         }
     }
 
     void TryExtendOrBacktrack(Vector2Int cell)
     {
-        if (_drawnPath.Count == 0)
+        if (Path.Count == 0)
             return;
 
-        var current = _drawnPath[_drawnPath.Count - 1];
+        var current = Path[Path.Count - 1];
         if (cell == current)
             return;
 
-        int visitedIndex = _drawnPath.IndexOf(cell);
+        int visitedIndex = Path.IndexOf(cell);
         if (visitedIndex >= 0)
         {
             // 鼠标回到已走路径上的任意节点：直接回退到该节点。
-            for (int i = _drawnPath.Count - 1; i > visitedIndex; i--)
+            for (int i = Path.Count - 1; i > visitedIndex; i--)
             {
-                var removed = _drawnPath[i];
-                _drawnPath.RemoveAt(i);
-                _entryDirForConstrained.Remove(removed);
+                var removed = Path[i];
+                Path.RemoveAt(i);
+                Constrained.Remove(removed);
             }
-            puzzle.RefreshVisuals(_drawnPath);
+            puzzle.RefreshVisuals(Path);
             return;
         }
 
@@ -214,30 +249,30 @@ public class PuzzleManager : MonoBehaviour
         {
             if (!TryGetEntryDir(current, out var entryDir))
                 return;
-            if (!IsValidConstrainedTurn(currentType, entryDir, moveDir))
+            if (!IsConstrainedTurn(currentType, entryDir, moveDir))
                 return;
         }
 
         if (puzzle.IsConstrainedMiddle(cell, out var nextType))
         {
-            if (!IsValidConstrainedEntry(nextType, moveDir))
+            if (!IsConstrainedEntry(nextType, moveDir))
                 return;
-            _entryDirForConstrained[cell] = moveDir;
+            Constrained[cell] = moveDir;
         }
 
-        _drawnPath.Add(cell);
-        puzzle.RefreshVisuals(_drawnPath);
+        Path.Add(cell);
+        puzzle.RefreshVisuals(Path);
     }
 
     bool TryGetEntryDir(Vector2Int cell, out Vector2Int entryDir)
     {
-        if (_entryDirForConstrained.TryGetValue(cell, out entryDir))
+        if (Constrained.TryGetValue(cell, out entryDir))
             return true;
 
-        int idx = _drawnPath.LastIndexOf(cell);
+        int idx = Path.LastIndexOf(cell);
         if (idx > 0)
         {
-            entryDir = _drawnPath[idx] - _drawnPath[idx - 1];
+            entryDir = Path[idx] - Path[idx - 1];
             return true;
         }
 
@@ -247,22 +282,22 @@ public class PuzzleManager : MonoBehaviour
 
     bool IsSolvedPath()
     {
-        if (_drawnPath.Count == 0)
+        if (Path.Count == 0)
             return false;
-        if (_drawnPath[0] != puzzle.StartCell)
+        if (Path[0] != puzzle.StartCell)
             return false;
-        if (_drawnPath[_drawnPath.Count - 1] != puzzle.EndCell)
+        if (Path[Path.Count - 1] != puzzle.EndCell)
             return false;
 
         var visitedRequired = new HashSet<Vector2Int>();
-        for (int i = 0; i < _drawnPath.Count; i++)
+        for (int i = 0; i < Path.Count; i++)
         {
-            var p = _drawnPath[i];
-            if (_requiredPoints.Contains(p))
+            var p = Path[i];
+            if (requiredPoints.Contains(p))
                 visitedRequired.Add(p);
         }
 
-        return visitedRequired.Count == _requiredPoints.Count;
+        return visitedRequired.Count == requiredPoints.Count;
     }
 
     static bool IsAdjacent(Vector2Int a, Vector2Int b) =>
@@ -271,14 +306,14 @@ public class PuzzleManager : MonoBehaviour
     static bool IsHorizontal(Vector2Int dir) => dir.x != 0;
     static bool IsVertical(Vector2Int dir) => dir.y != 0;
 
-    static bool IsValidConstrainedEntry(TileType type, Vector2Int entryDir) => type switch
+    static bool IsConstrainedEntry(TileType type, Vector2Int entryDir) => type switch
     {
         TileType.MiddleType2 => IsVertical(entryDir),
         TileType.MiddleType3 => IsHorizontal(entryDir),
         _ => true
     };
 
-    static bool IsValidConstrainedTurn(TileType type, Vector2Int entryDir, Vector2Int exitDir) => type switch
+    static bool IsConstrainedTurn(TileType type, Vector2Int entryDir, Vector2Int exitDir) => type switch
     {
         TileType.MiddleType2 => IsVertical(entryDir) && IsHorizontal(exitDir),
         TileType.MiddleType3 => IsHorizontal(entryDir) && IsVertical(exitDir),

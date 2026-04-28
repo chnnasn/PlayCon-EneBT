@@ -67,7 +67,7 @@ namespace PlayerState
                 reusableData.comboIndex = 0;
             }
         }
-        #region ?????
+        #region 被动技能
         public virtual void LightComboInput()
         {
          
@@ -151,7 +151,7 @@ namespace PlayerState
         #endregion
         
 
-        #region ???????
+        #region 动画事件
         public void DisConnectCombo()
         {
             reusableData.canLink = false;
@@ -187,7 +187,7 @@ namespace PlayerState
         {
         }
         
-        #region ??????
+        #region 伤害检测
         protected bool AttackDetection(ComboContainerData comboContainerData)
         {
 
@@ -206,9 +206,9 @@ namespace PlayerState
             return Random.Range(0, containerData.GetComboMaxCount());
         }
         
-        #region ?????????
+        #region 更新伤害点
         
-        //????api
+        //对齐api
         public void ReSetATKIndex(int index= 0)
         {
             reusableData.ATKIndex = 0;
@@ -219,7 +219,7 @@ namespace PlayerState
         }
         #endregion
 
-        #region �����˺�
+        #region 传递伤害
         private void AttackTrigger()
         {
             if (animator.AnimationAtTag("ATK") )
@@ -250,7 +250,7 @@ namespace PlayerState
                 var skillEnemy = player.CurrentEnemy;
                 GameEventsManager.MainInstance.CallEvent(HealthState.TriggerDamage.ToString(), reusableData.currentSkill.comboDamage, reusableData.currentSkill.hitName, reusableData.currentSkill.parryName, playerTransform, skillEnemy.transform,this);
 
-                #region ???
+                #region 顿帧
                 if (reusableData.currentSkill.pauseFrameTimeList!=null && reusableData.currentSkill.pauseFrameTimeList.Length > 0&& reusableData.ATKIndex <= reusableData.currentSkill.pauseFrameTimeList.Length)
                 {       
                    CameraHitFeel.MainInstance.PF(reusableData.currentSkill.pauseFrameTimeList[reusableData.ATKIndex - 1]);
@@ -263,7 +263,7 @@ namespace PlayerState
                 #endregion
                 
 
-                #region ????
+                #region 震屏
                 if (reusableData.currentSkill.shakeForce==null||reusableData.ATKIndex > reusableData.currentSkill.shakeForce.Length)//???????????????ATK??force???????????ATKindex????????force?????
                 {
                     return;
@@ -319,7 +319,7 @@ namespace PlayerState
             }
         }
 
-        #region ????????
+        #region 播放音效
         private void StartPlayWeapon()
         {
             PlayWeaponSound(reusableData.currentCombo.comboDates[reusableData.currentIndex.Value]);

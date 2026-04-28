@@ -18,8 +18,6 @@ public class CharacterHealthInfo : ScriptableObject
     public GenericProperty<float> currentHP = new GenericProperty<float>();
     public GenericProperty<bool> onDead = new GenericProperty<bool>();
     public float maxHP;
-  
-    //属性封装不会显示在unity面板上
 
     public void InitHealthData()
     {

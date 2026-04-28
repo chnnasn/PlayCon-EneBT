@@ -65,6 +65,8 @@ using Tools;
             movementStateMachine.HandInput();
             movementStateMachine.Update();
             comboStateMachine.Update();
+
+            MaintainManualEnemyLock();
         }
        
 
@@ -138,6 +140,8 @@ using Tools;
             PlayerInputSystem.MainInstance.inputActions.Player.Puzzle.canceled += OnPuzzleCanceled;
             PlayerInputSystem.MainInstance.inputActions.Player.MousePo.performed += OnPuzzlePointerMoved;
             PlayerInputSystem.MainInstance.inputActions.Player.Lock.started += OnLockStarted;
+
+            RegisterPuzzleManagerCallbacks();
         }
 
         private void UnregisterPuzzleInputCallbacks()
@@ -149,6 +153,42 @@ using Tools;
             PlayerInputSystem.MainInstance.inputActions.Player.Puzzle.canceled -= OnPuzzleCanceled;
             PlayerInputSystem.MainInstance.inputActions.Player.MousePo.performed -= OnPuzzlePointerMoved;
             PlayerInputSystem.MainInstance.inputActions.Player.Lock.started -= OnLockStarted;
+
+            UnregisterPuzzleManagerCallbacks();
+        }
+
+        private void RegisterPuzzleManagerCallbacks()
+        {
+            if (puzzleManager == null)
+                puzzleManager = FindObjectOfType<PuzzleManager>();
+            if (puzzleManager == null)
+                return;
+
+            puzzleManager.OneDrawingChanged -= OnOneStrokeDrawingStateChanged;
+            puzzleManager.OneStrokeTimedOut -= OnOneStrokeTimedOut;
+            puzzleManager.OneDrawingChanged += OnOneStrokeDrawingStateChanged;
+            puzzleManager.OneStrokeTimedOut += OnOneStrokeTimedOut;
+        }
+
+        private void UnregisterPuzzleManagerCallbacks()
+        {
+            if (puzzleManager == null)
+                return;
+
+            puzzleManager.OneDrawingChanged -= OnOneStrokeDrawingStateChanged;
+            puzzleManager.OneStrokeTimedOut -= OnOneStrokeTimedOut;
+        }
+
+        private void OnOneStrokeDrawingStateChanged(bool isDrawing)
+        {
+            playerCameraUtility?.SetInputEnabled(!isDrawing);
+        }
+
+        private void OnOneStrokeTimedOut()
+        {
+            Cursor.visible = false;
+            Cursor.lockState = CursorLockMode.Locked;
+            playerCameraUtility?.SetInputEnabled(true);
         }
 
         private void OnLockStarted(InputAction.CallbackContext context)
@@ -156,15 +196,13 @@ using Tools;
             
             if (isManualEnemyLockActive)
             {
-                isManualEnemyLockActive = false;
-                SetCurrentEnemy(null);
+                CancelManualEnemyLock();
                 return;
             }
 
             if (!TryDetectEnemyFromForward(out var enemyTarget))
             {
-                isManualEnemyLockActive = false;
-                SetCurrentEnemy(null);
+                CancelManualEnemyLock();
                 return;
             }
 
@@ -290,7 +328,7 @@ using Tools;
 
         private void OnPuzzlePointerMoved(InputAction.CallbackContext context)
         {
-            if (puzzleManager == null || !puzzleManager.IsPuzzleSessionActive)
+            if (puzzleManager == null || !puzzleManager.IsPuzzleSession)
                 return;
             if (!PlayerInputSystem.MainInstance.inputActions.Player.Puzzle.IsPressed())
                 return;
@@ -374,6 +412,66 @@ using Tools;
         public void SetCurrentEnemy(Enemy enemyTarget)
         {
             currentEnemy = enemyTarget;
+        }
+
+        private void MaintainManualEnemyLock()
+        {
+            if (!isManualEnemyLockActive)
+            {
+                return;
+            }
+
+            if (currentEnemy == null)
+            {
+                CancelManualEnemyLock();
+                return;
+            }
+
+            var origin = transform.position + Vector3.up * 1.0f;
+            var target = currentEnemy.transform.position + Vector3.up * 1.0f;
+            var toTarget = target - origin;
+            var sqrDistance = toTarget.sqrMagnitude;
+            var maxDistance = Mathf.Max(0.01f, lockDetectionDistance);
+            if (sqrDistance > maxDistance * maxDistance)
+            {
+                CancelManualEnemyLock();
+                return;
+            }
+
+            if (sqrDistance < 0.0001f)
+            {
+                return;
+            }
+
+            var distance = Mathf.Sqrt(sqrDistance);
+            var dir = toTarget / distance;
+            if (Physics.Raycast(origin, dir, out var hit, distance, Physics.AllLayers, QueryTriggerInteraction.Ignore))
+            {
+                var hitEnemy = hit.collider != null ? hit.collider.GetComponentInParent<Enemy>() : null;
+                if (hitEnemy != currentEnemy)
+                {
+                    CancelManualEnemyLock();
+                }
+
+                return;
+            }
+
+            CancelManualEnemyLock();
+        }
+
+        private void CancelManualEnemyLock()
+        {
+            isManualEnemyLockActive = false;
+            SetCurrentEnemy(null);
+
+            if (puzzleManager != null)
+            {
+                puzzleManager.CancelPuzzleSession(hideUi: true);
+            }
+
+            Cursor.visible = false;
+            Cursor.lockState = CursorLockMode.Locked;
+            playerCameraUtility?.SetInputEnabled(true);
         }
 
         private IEnumerator BlockCameraInputOnStartup()

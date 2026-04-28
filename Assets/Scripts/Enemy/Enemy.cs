@@ -160,10 +160,6 @@ public class Enemy : EnemyControllerBase
                     BeginChaseLock();
                     stateMachine.ChangeState(stateMachine.chaseState);
                 }
-                else
-                {
-                    
-                }
                 break;
         }
     }

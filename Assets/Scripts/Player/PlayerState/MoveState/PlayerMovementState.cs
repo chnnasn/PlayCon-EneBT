@@ -33,7 +33,6 @@ namespace PlayerState
             }
             if (reusableDate == null)
             {
-                //因为只new了它一次类，实际上获取到的类及成员都是它的引用
                 reusableDate=movementStateMachine.reusableDate;
             }
            
@@ -51,6 +50,7 @@ namespace PlayerState
 
         public virtual void HandInput()
         {
+            //不同的动画
             //animator.SetFloat(AnimID.MovementID,  GetPlayerMovementInputDirection().sqrMagnitude* reusableDate.inputMult, 0.35f,Time.deltaTime);
         }
         

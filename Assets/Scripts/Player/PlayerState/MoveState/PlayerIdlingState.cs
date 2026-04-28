@@ -23,15 +23,6 @@ namespace FSM
         public override void Update()
         {
             base.Update();
-            ////没有输入就退出
-            //if (CharacterInputSystem.MainInstance.PlayerMove==Vector2.zero)
-            //{
-            //    return;
-            //}
-            //else //有输入执行跳转
-            //{
-               
-            //}
         }
         protected override void AddInputActionCallBacks()
         {
@@ -52,8 +43,7 @@ namespace FSM
 
         private void CheckMoveInput()
         {
-           
-            //视为轻击角色没有Walk或者Run而是Run_Start_End
+            
             if (PlayerInputSystem.MainInstance.PlayerMove == Vector2.zero)
             {
                  animator.CrossFadeInFixedTime("Run_Start_End",0.13f);

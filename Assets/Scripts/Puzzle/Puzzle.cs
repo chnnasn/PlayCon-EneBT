@@ -18,16 +18,16 @@ public class Puzzle : MonoBehaviour
     private int nodeNum = 3;
     public TileSO tileSprites;
 
-    private RectTransform _tileContainer;
-    private GraphicRaycaster _raycaster;
-    private Canvas _canvas;
-    private Camera _uiCamera;
-    private Image[,] _cellIcons;
-    private Image[,] _cellBackgrounds;
-    private int[,] _board;
-    private Vector2Int _start;
-    private Vector2Int _end;
-    private bool _isSolved;
+    private RectTransform tileContainer;
+    private GraphicRaycaster raycaster;
+    private Canvas canvas;
+    private Camera uiCamera;
+    private Image[,] cellIcons;
+    private Image[,] cellBackgrounds;
+    private int[,] board;
+    private Vector2Int start;
+    private Vector2Int end;
+    private bool isSolved;
 
     private float CellSize => tileSprites != null ? tileSprites.cellSize : 100f;
     private float CellSpacing => tileSprites != null ? tileSprites.cellSpacing : 8f;
@@ -40,13 +40,13 @@ public class Puzzle : MonoBehaviour
 
     void Start()
     {
-        _canvas = GetComponentInParent<Canvas>();
-        _raycaster = GetComponentInParent<GraphicRaycaster>();
-        _uiCamera = _canvas != null && _canvas.renderMode != RenderMode.ScreenSpaceOverlay ? _canvas.worldCamera : null;
-        _tileContainer = CreateTileContainer("TileContainer");
+        canvas = GetComponentInParent<Canvas>();
+        raycaster = GetComponentInParent<GraphicRaycaster>();
+        uiCamera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay ? canvas.worldCamera : null;
+        tileContainer = CreateTileC("TileContainer");
     }
 
-    RectTransform CreateTileContainer(string name)
+    RectTransform CreateTileC(string name)
     {
         var go = new GameObject(name);
         go.transform.SetParent(transform);
@@ -54,19 +54,16 @@ public class Puzzle : MonoBehaviour
         Image img = go.AddComponent<Image>();
         img.raycastTarget = false;
         img.color = ContainerColor;
-
-        // new GameObject 自带 RectTransform，不能 AddComponent，要 GetComponent
+        
         var rt = go.GetComponent<RectTransform>();
         rt.localPosition = Vector3.zero;
         rt.localScale    = Vector3.one;
-
-        // 轴心在中心
+        
         rt.anchorMin     = new Vector2(0.5f, 0.5f);
         rt.anchorMax     = new Vector2(0.5f, 0.5f);
         rt.pivot         = new Vector2(0.5f, 0.5f);
         rt.anchoredPosition = Vector2.zero;
-
-        // 固定尺寸 = maxSize * cellSize
+        
         rt.sizeDelta = new Vector2(TotalSize, TotalSize);
 
         return rt;
@@ -74,30 +71,30 @@ public class Puzzle : MonoBehaviour
 
     void Generate()
     {
-        if (_tileContainer == null)
+        if (tileContainer == null)
             return;
 
         ClearCells();
-        _board = new int[maxSize, maxSize];
-        _isSolved = false;
+        board = new int[maxSize, maxSize];
+        isSolved = false;
 
         var line = new RandomLine();
-        bool success = line.Generate(ref _board, nodeNum);
+        bool success = line.Generate(ref board, nodeNum);
         if (!success)
         {
             return;
         }
 
-        _start = line.Start;
-        _end = line.End;
-        _cellIcons = new Image[maxSize, maxSize];
-        _cellBackgrounds = new Image[maxSize, maxSize];
+        start = line.Start;
+        end = line.End;
+        cellIcons = new Image[maxSize, maxSize];
+        cellBackgrounds = new Image[maxSize, maxSize];
 
         for (int x = 0; x < maxSize; x++)
         {
             for (int y = 0; y < maxSize; y++)
             {
-                CreateCell(x, y, (TileType)_board[x, y]);
+                CreateCell(x, y, (TileType)board[x, y]);
             }
         }
 
@@ -115,16 +112,15 @@ public class Puzzle : MonoBehaviour
 
     void ClearCells()
     {
-        for (int i = _tileContainer.childCount - 1; i >= 0; i--)
-            Destroy(_tileContainer.GetChild(i).gameObject);
+        for (int i = tileContainer.childCount - 1; i >= 0; i--)
+            Destroy(tileContainer.GetChild(i).gameObject);
     }
-
-    public void Regenerate() => Generate();
+    
 
     void CreateCell(int x, int y, TileType type)
     {
         var go = new GameObject($"Cell_{x}_{y}");
-        go.transform.SetParent(_tileContainer, false);
+        go.transform.SetParent(tileContainer, false);
 
         var bg = go.AddComponent<Image>();
         bg.raycastTarget = false;
@@ -150,8 +146,8 @@ public class Puzzle : MonoBehaviour
         iconRt.offsetMin = Vector2.zero;
         iconRt.offsetMax = Vector2.zero;
 
-        _cellBackgrounds[x, y] = bg;
-        _cellIcons[x, y] = icon;
+        cellBackgrounds[x, y] = bg;
+        cellIcons[x, y] = icon;
     }
 
     Sprite GetCellSprite(TileType type)
@@ -172,7 +168,7 @@ public class Puzzle : MonoBehaviour
     public bool TryGetCellFromScreen(Vector2 screenPosition, out Vector2Int cell)
     {
         cell = default;
-        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(_tileContainer, screenPosition, _uiCamera, out var localPoint))
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(tileContainer, screenPosition, uiCamera, out var localPoint))
             return false;
 
         float half = TotalSize * 0.5f;
@@ -193,53 +189,34 @@ public class Puzzle : MonoBehaviour
     public bool TryGetCellScreenPosition(Vector2Int cell, out Vector2 screenPosition)
     {
         screenPosition = default;
-        if (_tileContainer == null)
+        if (tileContainer == null)
             return false;
 
         if (cell.x < 0 || cell.x >= maxSize || cell.y < 0 || cell.y >= maxSize)
             return false;
 
         var local = GridToLocal(cell.x, cell.y);
-        var world = _tileContainer.TransformPoint(local);
-        screenPosition = RectTransformUtility.WorldToScreenPoint(_uiCamera, world);
+        var world = tileContainer.TransformPoint(local);
+        screenPosition = RectTransformUtility.WorldToScreenPoint(uiCamera, world);
         return true;
     }
-
-    public bool IsPointerBlocked(Vector2 screenPosition)
-    {
-        if (_raycaster == null || EventSystem.current == null)
-            return false;
-
-        var eventData = new PointerEventData(EventSystem.current) { position = screenPosition };
-        var results = new List<RaycastResult>();
-        _raycaster.Raycast(eventData, results);
-
-        for (int i = 0; i < results.Count; i++)
-        {
-            var hit = results[i].gameObject;
-            if (hit.transform == _tileContainer || hit.transform.IsChildOf(_tileContainer))
-                return false;
-        }
-
-        return results.Count > 0;
-    }
-
+    
     public int Size => maxSize;
-    public bool IsGenerated => _board != null;
+    public bool IsGenerated => board != null;
 
-    public Vector2Int StartCell => _start;
+    public Vector2Int StartCell => start;
 
-    public Vector2Int EndCell => _end;
+    public Vector2Int EndCell => end;
 
     public TileType GetCellType(Vector2Int cell)
     {
-        if (_board == null)
+        if (board == null)
             return TileType.Empty;
 
         if (cell.x < 0 || cell.x >= maxSize || cell.y < 0 || cell.y >= maxSize)
             return TileType.Empty;
 
-        return (TileType)_board[cell.x, cell.y];
+        return (TileType)board[cell.x, cell.y];
     }
 
     public bool IsConstrainedMiddle(Vector2Int cell, out TileType type)
@@ -247,29 +224,10 @@ public class Puzzle : MonoBehaviour
         type = GetCellType(cell);
         return type == TileType.MiddleType2 || type == TileType.MiddleType3;
     }
-
-    static bool IsHorizontal(Vector2Int dir) => dir.x != 0;
-    static bool IsVertical(Vector2Int dir) => dir.y != 0;
-
-    static bool IsValidConstrainedEntry(TileType type, Vector2Int entryDir) => type switch
-    {
-        // 2: 竖进横出
-        TileType.MiddleType2 => IsVertical(entryDir),
-        // 3: 横进竖出
-        TileType.MiddleType3 => IsHorizontal(entryDir),
-        _ => true
-    };
-
-    static bool IsValidConstrainedTurn(TileType type, Vector2Int entryDir, Vector2Int exitDir) => type switch
-    {
-        TileType.MiddleType2 => IsVertical(entryDir) && IsHorizontal(exitDir),
-        TileType.MiddleType3 => IsHorizontal(entryDir) && IsVertical(exitDir),
-        _ => true
-    };
-
+    
     public void RefreshVisuals(IReadOnlyCollection<Vector2Int> activePath)
     {
-        if (_cellIcons == null || _cellBackgrounds == null)
+        if (cellIcons == null || cellBackgrounds == null)
             return;
 
         var activeSet = activePath != null ? new HashSet<Vector2Int>(activePath) : new HashSet<Vector2Int>();
@@ -279,8 +237,8 @@ public class Puzzle : MonoBehaviour
             {
                 var pos = new Vector2Int(x, y);
                 bool isActive = activeSet.Contains(pos);
-                _cellBackgrounds[x, y].color = isActive ? ActiveColor : TileColor;
-                _cellIcons[x, y].color = isActive ? ActiveIconColor : InactiveIconColor;
+                cellBackgrounds[x, y].color = isActive ? ActiveColor : TileColor;
+                cellIcons[x, y].color = isActive ? ActiveIconColor : InactiveIconColor;
             }
         }
     }
@@ -290,10 +248,10 @@ public class Puzzle : MonoBehaviour
         maxSize = Mathf.Clamp(newMaxSize, 3, 4);
         nodeNum = Mathf.Clamp(newNodeNum, 2, 4);
 
-        if (_tileContainer != null)
+        if (tileContainer != null)
         {
-            _tileContainer.sizeDelta = new Vector2(TotalSize, TotalSize);
-            var containerImage = _tileContainer.GetComponent<Image>();
+            tileContainer.sizeDelta = new Vector2(TotalSize, TotalSize);
+            var containerImage = tileContainer.GetComponent<Image>();
             if (containerImage != null)
                 containerImage.color = ContainerColor;
         }
@@ -304,16 +262,16 @@ public class Puzzle : MonoBehaviour
 
     public void SetPuzzleVisible(bool visible)
     {
-        if (_tileContainer != null)
-            _tileContainer.gameObject.SetActive(visible);
+        if (tileContainer != null)
+            tileContainer.gameObject.SetActive(visible);
     }
 
     public void SetSolved(bool solved)
     {
-        _isSolved = solved;
+        isSolved = solved;
     }
 
-    public bool IsSolved => _isSolved;
+    public bool IsSolved => isSolved;
 
 }
 

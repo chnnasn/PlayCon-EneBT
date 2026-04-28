@@ -43,7 +43,7 @@ public class EnemyBreakState : EnemyState
 
     public override void Update()
     {
-        // 破防阶段：原地不动、也不自动转向目标。
+        // 破防阶段
         enemy.SetMovement(0f);
 
         if (breakTimer == null && fallbackCountdown > 0f)

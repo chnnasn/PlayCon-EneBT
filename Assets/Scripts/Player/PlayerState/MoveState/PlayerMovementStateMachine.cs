@@ -7,7 +7,6 @@ namespace FSM
 {
     public class PlayerMovementStateMachine : StateMachine
     {
-        //缓存初始状态
         public PlayerStateReusableDate reusableDate { get;  }
         public Player player { get; }
         public PlayerIdlingState idlingState { get; }
@@ -29,7 +28,7 @@ namespace FSM
             player = P;
 
             reusableDate =new PlayerStateReusableDate();
-            //给状态传入该状态机的引用
+            
             idlingState = new PlayerIdlingState(this);
 
             walkingState = new PlayerWalkingState(this);

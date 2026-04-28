@@ -388,7 +388,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   maxSize: 3
   nodeNum: 3
-  timeLimitSeconds: 10
+  TimeSeconds: 10
+  CooldownSeconds: 1
 --- !u!1001 &231090985
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1695,8 +1696,8 @@ MonoBehaviour:
   maxVerticalSpeed: 20
   minVerticalSpeed: -3
   verticalSpeed: 0
-  GroundDetectionRadius: 0.46
-  GroundDetectionOffset: 0.16
+  GroundDetectionRadius: 0
+  GroundDetectionOffset: 0
   whatIsGround:
     serializedVersion: 2
     m_Bits: 8
@@ -1725,8 +1726,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   currentHP: 0
-  currentStrength: 0
-  currentDefenseValue: 0
   characterHealthInfo: {fileID: 11400000, guid: 6bd8958e86c462941b2e594119d101ee, type: 2}
 --- !u!1 &327719984
 GameObject:
@@ -4540,8 +4539,8 @@ MonoBehaviour:
   maxVerticalSpeed: 20
   minVerticalSpeed: -3
   verticalSpeed: 0
-  GroundDetectionRadius: 0.19
-  GroundDetectionOffset: -0.08
+  GroundDetectionRadius: 0.2
+  GroundDetectionOffset: 0
   whatIsGround:
     serializedVersion: 2
     m_Bits: 8

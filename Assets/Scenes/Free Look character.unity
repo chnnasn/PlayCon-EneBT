@@ -694,15 +694,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f5255da99f6af944b907e552b710ca49, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 5.822527
+      value: 0.93
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f5255da99f6af944b907e552b710ca49, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 1.11
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f5255da99f6af944b907e552b710ca49, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 3.48
+      value: 0.4542418
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f5255da99f6af944b907e552b710ca49, type: 3}
       propertyPath: m_LocalRotation.w
@@ -827,6 +827,14 @@ PrefabInstance:
     - target: {fileID: -6253592817678267179, guid: f5255da99f6af944b907e552b710ca49, type: 3}
       propertyPath: m_Layer
       value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: -6242104649559239216, guid: f5255da99f6af944b907e552b710ca49, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0.053199135
+      objectReference: {fileID: 0}
+    - target: {fileID: -6242104649559239216, guid: f5255da99f6af944b907e552b710ca49, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0.020891756
       objectReference: {fileID: 0}
     - target: {fileID: -6242104649559239216, guid: f5255da99f6af944b907e552b710ca49, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -1503,7 +1511,11 @@ PrefabInstance:
     - target: {fileID: 5866666021909216657, guid: f5255da99f6af944b907e552b710ca49, type: 3}
       propertyPath: m_Controller
       value: 
-      objectReference: {fileID: 9100000, guid: 4967624ad7ff390449a1a43feb6d1c30, type: 2}
+      objectReference: {fileID: 9100000, guid: 1b882562391945c4095daaa6bb6d3318, type: 2}
+    - target: {fileID: 5866666021909216657, guid: f5255da99f6af944b907e552b710ca49, type: 3}
+      propertyPath: m_CullingMode
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 6311696543851329281, guid: f5255da99f6af944b907e552b710ca49, type: 3}
       propertyPath: m_Layer
       value: 7
@@ -1706,6 +1718,7 @@ MonoBehaviour:
   moveMult: 0.2
   enemySO: {fileID: 11400000, guid: 46ef56c8560586a448b9f070206a47c5, type: 2}
   target: {fileID: 0}
+  useBehaviorTree: 1
   currentStateName: 
   damageTakenMultiplier: 1
 --- !u!4 &263602063 stripped

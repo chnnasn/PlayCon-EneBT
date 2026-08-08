@@ -5,44 +5,118 @@ public class Enemy : EnemyControllerBase
 {
     public const string PlayerOneStrokeCommandEvent = "PlayerOneStrokeCommand";
 
+    [Header("AI Architecture")]
+    [Tooltip("使用行为树（BT）驱动敌人 AI；FSM 代码保留在 EnemyState 下，取消勾选可回退到 FSM。")]
+    [SerializeField] private bool useBehaviorTree = true;
+
     [Header("Debug")]
     [SerializeField] private string currentStateName;
     [SerializeField] private float damageTakenMultiplier = 1f;
 
+    private EnemyHeath health;
+
     public EnemyStateMachine stateMachine { get; private set; }
+    public EnemyBehaviorTree behaviorTree { get; private set; }
     public Vector3 PatrolAreaCenter { get; private set; }
     public Transform ChaseTarget { get; private set; }
     public bool HasChaseLock => ChaseTarget != null;
     public float DamageTakenMultiplier => damageTakenMultiplier;
+    public bool IsInBreakState => useBehaviorTree
+        ? behaviorTree != null && behaviorTree.IsBreakActive
+        : stateMachine != null && stateMachine.currentState.Value == stateMachine.breakState;
+    public bool IsDead => health != null && health.IsDead;
+    /// <summary>当前是否正在播放攻击动画（撕咬/爪击/咆哮），用于防止攻击动画中途被切换。</summary>
+    public bool IsAttackAnimationPlaying
+    {
+        get
+        {
+            if (characterAnimator == null)
+            {
+                return false;
+            }
+
+            var info = characterAnimator.GetCurrentAnimatorStateInfo(0);
+            var data = Data;
+            if (data == null)
+            {
+                return false;
+            }
+
+            // 兼容子状态机：状态名可能带路径前缀，优先用片段名判断（片段名 = 状态名）。
+            var clipInfos = characterAnimator.GetCurrentAnimatorClipInfo(0);
+            if (clipInfos.Length > 0)
+            {
+                var clipName = clipInfos[0].clip.name;
+                if (clipName == data.biteStateName || clipName == data.clawStateName || clipName == data.roarStateName)
+                {
+                    return true;
+                }
+            }
+
+            return info.IsName(data.biteStateName) || info.IsName(data.clawStateName) || info.IsName(data.roarStateName);
+        }
+    }
 
     protected override void Awake()
     {
         base.Awake();
+        health = GetComponent<EnemyHeath>();
         PatrolAreaCenter = transform.position;
+        // FSM 状态机保留创建，但默认不再启用。
         stateMachine = new EnemyStateMachine(this);
+        if (useBehaviorTree)
+        {
+            behaviorTree = new EnemyBehaviorTree(this);
+        }
     }
 
     protected override void Start()
     {
         base.Start();
-        stateMachine.ChangeState(stateMachine.idleState);
+        if (!useBehaviorTree)
+        {
+            stateMachine.ChangeState(stateMachine.idleState);
+        }
     }
 
     protected override void Update()
     {
         base.Update();
+
+        if (useBehaviorTree)
+        {
+            if (behaviorTree != null)
+            {
+                behaviorTree.Update();
+                currentStateName = behaviorTree.CurrentBehavior;
+            }
+
+            return;
+        }
+
         stateMachine.Update();
     }
 
     public void OnPlayerOneStrokeCommand()
     {
         var duration = Data != null ? Data.retreatDuration : 0.35f;
-        if (duration <= 0f || stateMachine == null)
+        if (duration <= 0f)
         {
             return;
         }
 
         var player = ChaseTarget != null ? ChaseTarget : target != null ? target : FindObjectOfType<Player>() != null ? FindObjectOfType<Player>().transform : null;
+        if (useBehaviorTree)
+        {
+            behaviorTree?.RequestRetreat(player);
+            return;
+        }
+
+        if (stateMachine == null)
+        {
+            return;
+        }
+
         stateMachine.retreatState.BeginRetreat(player);
     }
 
@@ -118,8 +192,26 @@ public class Enemy : EnemyControllerBase
         damageTakenMultiplier = Mathf.Max(0f, value);
     }
 
+    /// <summary>受击通知（由 EnemyHeath 转发），行为树进入 Hit 状态。</summary>
+    public void NotifyHit(Transform attacker)
+    {
+        if (useBehaviorTree)
+        {
+            behaviorTree?.RequestHit(attacker);
+            return;
+        }
+
+        // FSM 回退路径：保持原逻辑，受击动画退出事件会触发追击。
+    }
+
     public void EnterBreakState()
     {
+        if (useBehaviorTree)
+        {
+            behaviorTree?.RequestBreak();
+            return;
+        }
+
         if (stateMachine == null)
         {
             return;
@@ -130,12 +222,10 @@ public class Enemy : EnemyControllerBase
 
     private void OnEnable()
     {
-        if (stateMachine == null)
+        if (!useBehaviorTree && stateMachine != null)
         {
-            return;
+            stateMachine.currentState.OnValueChanged += HandleStateChanged;
         }
-
-        stateMachine.currentState.OnValueChanged += HandleStateChanged;
 
         if (GameEventsManager.MainInstance != null)
         {
@@ -145,12 +235,10 @@ public class Enemy : EnemyControllerBase
     
     private void OnDisable()
     {
-        if (stateMachine == null)
+        if (!useBehaviorTree && stateMachine != null)
         {
-            return;
+            stateMachine.currentState.OnValueChanged -= HandleStateChanged;
         }
-
-        stateMachine.currentState.OnValueChanged -= HandleStateChanged;
 
         if (GameEventsManager.MainInstance != null)
         {
@@ -174,11 +262,24 @@ public class Enemy : EnemyControllerBase
 
     private void HandleStateChanged(IState state)
     {
-        currentStateName = state == null ? "None" : state.GetType().Name;
+        var stateName = state == null ? "None" : state.GetType().Name;
+        if (currentStateName == stateName)
+        {
+            return;
+        }
+
+        currentStateName = stateName;
+        Debug.Log($"[EnemyFSM] frame={Time.frameCount} time={Time.time:F2} {name} -> {stateName}", this);
     }
     
     public void OnAnimationExitEvent(AnimationState playerState)
     {
+        if (useBehaviorTree)
+        {
+            behaviorTree?.OnAnimationExitEvent(playerState);
+            return;
+        }
+
         switch (playerState)
         {
             case AnimationState.Idle:

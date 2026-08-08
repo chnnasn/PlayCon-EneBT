@@ -18,28 +18,71 @@ MonoBehaviour:
   obstacleMask:
     serializedVersion: 2
     m_Bits: 0
-  viewDistance: 4
-  viewAngle: 45
+  viewDistance: 12
+  viewAngle: 90
   eyeHeight: 0
   rotationTime: 1.37
+  combatRotationTime: 8
   patrolSpeed: 1
   chaseSpeed: 2.8
   arriveDistance: 1
+  chaseRunDistance: 4
+  chaseWalkSpeed: 1.5
+  runStateName: Run
+  repositionRetreatThreshold: 1.4
+  repositionAdvanceThreshold: 2.6
+  repositionMaxEngageDistance: 4.5
+  repositionSpeed: 2
+  repositionDuration: 0.8
+  repositionCooldown: 1.2
   patrolWaitTime: 2
   alertDuration: 2.9
   alertToChaseDelay: 1.2
   patrolAreaSize: {x: 10, y: 10}
   lockValueIdle: 1
   lockValueMove: 0
+  chaseLockValue: 1
   patrolMovementValue: 1
   chaseMovementValue: 1
+  retreatMovementValue: 1
+  retreatDuration: 0.35
+  retreatSpeed: 2.5
+  retreatStopDistanceToPlayer: 4.5
   idleStateName: Idle
   idleCrossFade: 0.05
   moveStartStateName: WalkStart
   moveStartCrossFade: 0.1
+  retreatStateName: Retreat
   breakStateName: BrokenDefense
   breakCrossFade: 0.05
   breakDuration: 10
   breakDamageTakenMultiplier: 2
+  spawnStateName: Spawn
+  spawnCrossFade: 0.1
+  spawnDuration: 1
+  biteStateName: Goblin_Ani_Attack_01
+  clawStateName: Goblin_Ani_Attack_02
+  roarStateName: Goblin_Ani_Attack_03
+  biteCrossFade: 0.05
+  clawCrossFade: 0.05
+  roarCrossFade: 0.05
+  biteRange: 1.5
+  clawRange: 2.5
+  biteCooldown: 1.2
+  clawCooldown: 0.8
+  biteDuration: 0.8
+  clawDuration: 0.8
+  roarDuration: 1
+  investigateSpeed: 2.5
+  investigateDuration: 2
+  investigateArriveDistance: 0.5
+  hitStateName: Hit_2
+  hitCrossFade: 0.1
+  hitDuration: 0.5
+  chaseGiveUpDistance: 18
+  lairReturnSpeed: 3
+  lairArriveDistance: 0.5
+  deadStateName: Dead
+  deadCrossFade: 0.1
   drawScanRays: 1
   scanRayCount: 7

@@ -48,6 +48,11 @@ public abstract class EnemyControllerBase : ControllerBase
 
     public void FaceTargetThenMove(Vector3 worldPoint, float speed)
     {
+        FaceTargetThenMove(worldPoint, speed, enemySO != null ? enemySO.rotationTime : 0.12f);
+    }
+
+    public void FaceTargetThenMove(Vector3 worldPoint, float speed, float rotationTime)
+    {
         var flatDirection = worldPoint - transform.position;
         flatDirection.y = 0f;
         if (flatDirection.sqrMagnitude < 0.0001f)
@@ -56,7 +61,7 @@ public abstract class EnemyControllerBase : ControllerBase
         }
 
         var direction = flatDirection.normalized;
-        RotateTowards(direction);
+        RotateTowards(direction, rotationTime);
         MoveInDirection(direction, speed);
     }
 
@@ -110,12 +115,17 @@ public abstract class EnemyControllerBase : ControllerBase
 
     public void RotateTowards(Vector3 direction)
     {
+        RotateTowards(direction, enemySO != null ? enemySO.rotationTime : 0.12f);
+    }
+
+    public void RotateTowards(Vector3 direction, float rotationTime)
+    {
         if (direction.sqrMagnitude < 0.0001f)
         {
             return;
         }
 
-        var timer = enemySO != null ? enemySO.rotationTime : 0.12f;
+        var timer = rotationTime;
         transform.LookAt(transform.position + direction, timer);
 
         var flat = direction;
@@ -127,6 +137,36 @@ public abstract class EnemyControllerBase : ControllerBase
             {
                 transform.rotation = desired;
             }
+        }
+    }
+
+    /// <summary>面向目标并向后移动（策略性后撤/拉开距离）。</summary>
+    public void RetreatFrom(Vector3 worldPoint, float speed, float rotationTime)
+    {
+        var flatDirection = worldPoint - transform.position;
+        flatDirection.y = 0f;
+        if (flatDirection.sqrMagnitude < 0.0001f)
+        {
+            return;
+        }
+
+        RotateTowards(flatDirection, rotationTime);
+        MoveInDirection(-flatDirection.normalized, speed);
+    }
+
+    /// <summary>立即朝向目标方向（无插值，用于攻击/战斗）。</summary>
+    public void SnapRotateTowards(Vector3 direction)
+    {
+        if (direction.sqrMagnitude < 0.0001f)
+        {
+            return;
+        }
+
+        var flat = direction;
+        flat.y = 0f;
+        if (flat.sqrMagnitude > 0.0001f)
+        {
+            transform.rotation = Quaternion.LookRotation(flat.normalized);
         }
     }
 

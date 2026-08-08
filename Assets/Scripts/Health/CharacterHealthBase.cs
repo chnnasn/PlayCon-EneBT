@@ -20,6 +20,10 @@ public class CharacterHealthBase : MonoBehaviour
     protected Animator animator;
 
     private Transform BarUI;
+
+    /// <summary>是否已死亡（行为树 Dead 状态依赖）。</summary>
+    public bool IsDead => healthInfo != null && healthInfo.currentHP.Value <= 0f;
+
     protected virtual void Awake()
     {
         animator = GetComponent<Animator>();
@@ -97,6 +101,7 @@ public class CharacterHealthBase : MonoBehaviour
         Damage *= GetDamageTakenMultiplier();
         SetEnemy(Attacker);
         CharacterHitAction(Damage, HitName, ParryName);
+        OnCharacterHit(Damage, HitName, ParryName, Attacker);
         OnCharacterDamageAction(Damage);
     }
 
@@ -111,18 +116,19 @@ public class CharacterHealthBase : MonoBehaviour
         
     }
 
+    /// <summary>
+    /// 受到攻击后的扩展点：子类可覆盖以响应受击（例如通知行为树进入 Hit 状态）。
+    /// </summary>
+    protected virtual void OnCharacterHit(float damage, string hitName, string parryName, Transform attacker)
+    {
+    }
+
     protected virtual float GetDamageTakenMultiplier()
     {
         if (TryGetComponent<Enemy>(out var enemy))
         {
             // 非破防：只吃 20% 伤害；破防：吃满额伤害。
-            var baseMultiplier = 0.2f;
-            var machine = enemy.stateMachine;
-            if (machine != null && machine.currentState.Value == machine.breakState)
-            {
-                baseMultiplier = 1f;
-            }
-
+            var baseMultiplier = enemy.IsInBreakState ? 1f : 0.2f;
             return baseMultiplier * enemy.DamageTakenMultiplier;
         }
 

@@ -8,6 +8,7 @@ public class EnemyStateMachine : StateMachine
     public EnemyAlertState alertState { get; }
     public EnemyChaseState chaseState { get; }
     public EnemyBreakState breakState { get; }
+    public EnemyRetreatState retreatState { get; }
 
     public EnemyStateMachine(Enemy enemyController)
     {
@@ -17,5 +18,6 @@ public class EnemyStateMachine : StateMachine
         alertState = new EnemyAlertState(this);
         chaseState = new EnemyChaseState(this);
         breakState = new EnemyBreakState(this);
+        retreatState = new EnemyRetreatState(this);
     }
 }

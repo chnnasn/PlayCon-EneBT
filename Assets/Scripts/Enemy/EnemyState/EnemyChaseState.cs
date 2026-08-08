@@ -6,11 +6,12 @@ public class EnemyChaseState : EnemyState
 
     public override void Enter()
     {
+        enemy.SetMovement(0f);
         var data = enemy.Data;
         enemy.CrossFadeState(data.moveStartStateName, data.moveStartCrossFade);
         enemy.SetOffset(true);
-        enemy.SetLock(data.lockValueMove);
-        enemy.SetMovement(data.chaseMovementValue);
+        enemy.SetLock(data.chaseLockValue);
+        enemy.SetMovement(0f);
     }
 
     public override void Update()
@@ -22,8 +23,8 @@ public class EnemyChaseState : EnemyState
         }
 
         enemy.SetOffset(true);
-        enemy.SetLock(enemy.Data.lockValueMove);
+        enemy.SetLock(enemy.Data.chaseLockValue);
         MoveTo(enemy.ChaseTarget.position, enemy.Data.chaseSpeed);
-        enemy.SetMovement(enemy.Data.chaseMovementValue);
+        enemy.SetMovement(0f);
     }
 }

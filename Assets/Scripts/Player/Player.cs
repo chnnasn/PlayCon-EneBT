@@ -15,7 +15,6 @@ using Tools;
         [SerializeField] public string currentComboState;
 
         [SerializeField] private Enemy currentEnemy;
-        [SerializeField] private bool isManualEnemyLockActive;
 
         [SerializeField] public PlayerSO playerSO;
         [Header("Lock Detection")]
@@ -32,7 +31,7 @@ using Tools;
         public PlayerComboStateMachine comboStateMachine { get;private set; }
         public new Transform camera { get; private set; }
         public Enemy CurrentEnemy => currentEnemy;
-        public bool IsManualEnemyLockActive => isManualEnemyLockActive;
+        public bool IsManualEnemyLockActive => currentEnemy != null;
         private readonly Collider[] lockDetectionHits = new Collider[MaxLockDetectionHits];
         
         protected override void Awake()
@@ -66,7 +65,6 @@ using Tools;
             movementStateMachine.Update();
             comboStateMachine.Update();
 
-            MaintainManualEnemyLock();
         }
        
 
@@ -139,8 +137,6 @@ using Tools;
             PlayerInputSystem.MainInstance.inputActions.Player.Puzzle.started += OnPuzzleStarted;
             PlayerInputSystem.MainInstance.inputActions.Player.Puzzle.canceled += OnPuzzleCanceled;
             PlayerInputSystem.MainInstance.inputActions.Player.MousePo.performed += OnPuzzlePointerMoved;
-            PlayerInputSystem.MainInstance.inputActions.Player.Lock.started += OnLockStarted;
-
             RegisterPuzzleManagerCallbacks();
         }
 
@@ -152,8 +148,6 @@ using Tools;
             PlayerInputSystem.MainInstance.inputActions.Player.Puzzle.started -= OnPuzzleStarted;
             PlayerInputSystem.MainInstance.inputActions.Player.Puzzle.canceled -= OnPuzzleCanceled;
             PlayerInputSystem.MainInstance.inputActions.Player.MousePo.performed -= OnPuzzlePointerMoved;
-            PlayerInputSystem.MainInstance.inputActions.Player.Lock.started -= OnLockStarted;
-
             UnregisterPuzzleManagerCallbacks();
         }
 
@@ -190,26 +184,6 @@ using Tools;
             Cursor.lockState = CursorLockMode.Locked;
             playerCameraUtility?.SetInputEnabled(true);
         }
-
-        private void OnLockStarted(InputAction.CallbackContext context)
-        {
-            
-            if (isManualEnemyLockActive)
-            {
-                CancelManualEnemyLock();
-                return;
-            }
-
-            if (!TryDetectEnemyFromForward(out var enemyTarget))
-            {
-                CancelManualEnemyLock();
-                return;
-            }
-
-            isManualEnemyLockActive = true;
-            SetCurrentEnemy(enemyTarget);
-        }
-        
 
         private bool TryDetectEnemyFromForward(out Enemy enemyTarget)
         {
@@ -304,11 +278,15 @@ using Tools;
             if (Mouse.current == null || !Mouse.current.rightButton.wasPressedThisFrame)
                 return;
 
-            if (!CanShowPuzzleByFrontArea())
+            if (!TryDetectEnemyFromForward(out var enemyTarget))
             {
+                SetCurrentEnemy(null);
                 puzzleManager.SetPuzzleVisible(false);
                 return;
             }
+
+            SetCurrentEnemy(enemyTarget);
+            NotifyCurrentLockedEnemyOneStrokeCommand();
             
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
@@ -324,6 +302,21 @@ using Tools;
         private bool CanShowPuzzleByFrontArea()
         {
             return currentEnemy != null;
+        }
+
+        private void NotifyCurrentLockedEnemyOneStrokeCommand()
+        {
+            if (!CanShowPuzzleByFrontArea())
+            {
+                return;
+            }
+
+            if (GameEventsManager.MainInstance == null)
+            {
+                return;
+            }
+
+            GameEventsManager.MainInstance.CallEvent(Enemy.PlayerOneStrokeCommandEvent, currentEnemy.transform);
         }
 
         private void OnPuzzlePointerMoved(InputAction.CallbackContext context)
@@ -414,54 +407,8 @@ using Tools;
             currentEnemy = enemyTarget;
         }
 
-        private void MaintainManualEnemyLock()
-        {
-            if (!isManualEnemyLockActive)
-            {
-                return;
-            }
-
-            if (currentEnemy == null)
-            {
-                CancelManualEnemyLock();
-                return;
-            }
-
-            var origin = transform.position + Vector3.up * 1.0f;
-            var target = currentEnemy.transform.position + Vector3.up * 1.0f;
-            var toTarget = target - origin;
-            var sqrDistance = toTarget.sqrMagnitude;
-            var maxDistance = Mathf.Max(0.01f, lockDetectionDistance);
-            if (sqrDistance > maxDistance * maxDistance)
-            {
-                CancelManualEnemyLock();
-                return;
-            }
-
-            if (sqrDistance < 0.0001f)
-            {
-                return;
-            }
-
-            var distance = Mathf.Sqrt(sqrDistance);
-            var dir = toTarget / distance;
-            if (Physics.Raycast(origin, dir, out var hit, distance, Physics.AllLayers, QueryTriggerInteraction.Ignore))
-            {
-                var hitEnemy = hit.collider != null ? hit.collider.GetComponentInParent<Enemy>() : null;
-                if (hitEnemy != currentEnemy)
-                {
-                    CancelManualEnemyLock();
-                }
-
-                return;
-            }
-
-            CancelManualEnemyLock();
-        }
-
         private void CancelManualEnemyLock()
         {
-            isManualEnemyLockActive = false;
             SetCurrentEnemy(null);
 
             if (puzzleManager != null)

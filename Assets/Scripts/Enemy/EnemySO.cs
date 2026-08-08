@@ -27,8 +27,15 @@ public class EnemySO : ScriptableObject
     [Header("Animator Parameters")]
     public float lockValueIdle = 1f;
     public float lockValueMove = 0f;
+    public float chaseLockValue = 1f;
     public float patrolMovementValue = 1f;
     public float chaseMovementValue = 1f;
+    public float retreatMovementValue = 1f;
+
+    [Header("Retreat Response (player one-stroke)")]
+    [Min(0f)] public float retreatDuration = 0.35f;
+    [Min(0f)] public float retreatSpeed = 2.5f;
+    [Min(0f)] public float retreatStopDistanceToPlayer = 4.5f;
 
     [Header("Animator States")]
     public string idleStateName = "Idle";

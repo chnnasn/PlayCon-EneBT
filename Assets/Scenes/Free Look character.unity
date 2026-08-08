@@ -4550,7 +4550,6 @@ MonoBehaviour:
   currentMovementState: 
   currentComboState: 
   currentEnemy: {fileID: 0}
-  isManualEnemyLockActive: 0
   playerSO: {fileID: 11400000, guid: 8a0063956d838564dbac90d1ee1683b4, type: 2}
   lockDetectionDistance: 12
   lockEnemyMask:

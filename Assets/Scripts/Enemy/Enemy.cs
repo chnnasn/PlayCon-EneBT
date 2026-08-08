@@ -3,6 +3,8 @@ using UnityEngine;
 
 public class Enemy : EnemyControllerBase
 {
+    public const string PlayerOneStrokeCommandEvent = "PlayerOneStrokeCommand";
+
     [Header("Debug")]
     [SerializeField] private string currentStateName;
     [SerializeField] private float damageTakenMultiplier = 1f;
@@ -30,6 +32,18 @@ public class Enemy : EnemyControllerBase
     {
         base.Update();
         stateMachine.Update();
+    }
+
+    public void OnPlayerOneStrokeCommand()
+    {
+        var duration = Data != null ? Data.retreatDuration : 0.35f;
+        if (duration <= 0f || stateMachine == null)
+        {
+            return;
+        }
+
+        var player = ChaseTarget != null ? ChaseTarget : target != null ? target : FindObjectOfType<Player>() != null ? FindObjectOfType<Player>().transform : null;
+        stateMachine.retreatState.BeginRetreat(player);
     }
 
     public Vector3 GetRandomPatrolPoint()
@@ -122,6 +136,11 @@ public class Enemy : EnemyControllerBase
         }
 
         stateMachine.currentState.OnValueChanged += HandleStateChanged;
+
+        if (GameEventsManager.MainInstance != null)
+        {
+            GameEventsManager.MainInstance.AddEventListening<Transform>(PlayerOneStrokeCommandEvent, OnPlayerOneStrokeCommandEvent);
+        }
     }
     
     private void OnDisable()
@@ -132,6 +151,24 @@ public class Enemy : EnemyControllerBase
         }
 
         stateMachine.currentState.OnValueChanged -= HandleStateChanged;
+
+        if (GameEventsManager.MainInstance != null)
+        {
+            GameEventsManager.MainInstance.ReMoveEvent<Transform>(PlayerOneStrokeCommandEvent, OnPlayerOneStrokeCommandEvent);
+        }
+    }
+
+    private void OnPlayerOneStrokeCommandEvent(Transform enemyTransform)
+    {
+        if (enemyTransform == null)
+        {
+            return;
+        }
+
+        if (enemyTransform == transform)
+        {
+            OnPlayerOneStrokeCommand();
+        }
     }
 
 

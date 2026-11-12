@@ -1,0 +1,295 @@
+{
+  "jobId": "45da9cb5",
+  "kind": "test",
+  "status": "completed",
+  "progress": 100,
+  "currentStage": "completed",
+  "startedAt": 1792165503,
+  "updatedAt": 1792165611,
+  "warnings": [],
+  "resultSummary": "Test run completed: 10/10 passed.",
+  "relatedWorkflowId": null,
+  "reportId": null,
+  "canCancel": false,
+  "chunkSize": 100,
+  "processedItems": 0,
+  "totalItems": 0,
+  "error": null,
+  "preview": null,
+  "metadata": {
+    "testMode": "EditMode",
+    "filter": "Navigation.Tests",
+    "runnerJobId": "a768a167-95c2-4d6b-83c8-326973315629"
+  },
+  "resultData": {
+    "testMode": "EditMode",
+    "filter": "Navigation.Tests",
+    "totalTests": 10,
+    "passedTests": 10,
+    "failedTests": 0,
+    "skippedTests": 0,
+    "inconclusiveTests": 0,
+    "otherTests": 0,
+    "failedTestNames": [],
+    "failedTestDetails": []
+  },
+  "items": [],
+  "logs": [
+    {
+      "timestamp": 1792165503,
+      "level": "info",
+      "stage": "queued",
+      "message": "Test run accepted and waiting to start.",
+      "code": "job_created"
+    },
+    {
+      "timestamp": 1792165503,
+      "level": "info",
+      "stage": "starting",
+      "message": "Starting EditMode tests.",
+      "code": "test_start"
+    },
+    {
+      "timestamp": 1792165508,
+      "level": "warn",
+      "stage": "recovery",
+      "message": "Job reloaded after domain reload and will resume automatically.",
+      "code": "domain_reload_recovery"
+    },
+    {
+      "timestamp": 1792165508,
+      "level": "info",
+      "stage": "reconnected",
+      "message": "Reconnected to EditMode tests after domain reload.",
+      "code": "test_recovery"
+    },
+    {
+      "timestamp": 1792165533,
+      "level": "warn",
+      "stage": "recovery",
+      "message": "Job reloaded after domain reload and will resume automatically.",
+      "code": "domain_reload_recovery"
+    },
+    {
+      "timestamp": 1792165533,
+      "level": "info",
+      "stage": "reconnected",
+      "message": "Reconnected to EditMode tests after domain reload.",
+      "code": "test_recovery"
+    },
+    {
+      "timestamp": 1792165542,
+      "level": "warn",
+      "stage": "recovery",
+      "message": "Job reloaded after domain reload and will resume automatically.",
+      "code": "domain_reload_recovery"
+    },
+    {
+      "timestamp": 1792165542,
+      "level": "info",
+      "stage": "reconnected",
+      "message": "Reconnected to EditMode tests after domain reload.",
+      "code": "test_recovery"
+    },
+    {
+      "timestamp": 1792165551,
+      "level": "warn",
+      "stage": "recovery",
+      "message": "Job reloaded after domain reload and will resume automatically.",
+      "code": "domain_reload_recovery"
+    },
+    {
+      "timestamp": 1792165551,
+      "level": "info",
+      "stage": "reconnected",
+      "message": "Reconnected to EditMode tests after domain reload.",
+      "code": "test_recovery"
+    },
+    {
+      "timestamp": 1792165560,
+      "level": "warn",
+      "stage": "recovery",
+      "message": "Job reloaded after domain reload and will resume automatically.",
+      "code": "domain_reload_recovery"
+    },
+    {
+      "timestamp": 1792165560,
+      "level": "info",
+      "stage": "reconnected",
+      "message": "Reconnected to EditMode tests after domain reload.",
+      "code": "test_recovery"
+    },
+    {
+      "timestamp": 1792165569,
+      "level": "warn",
+      "stage": "recovery",
+      "message": "Job reloaded after domain reload and will resume automatically.",
+      "code": "domain_reload_recovery"
+    },
+    {
+      "timestamp": 1792165569,
+      "level": "info",
+      "stage": "reconnected",
+      "message": "Reconnected to EditMode tests after domain reload.",
+      "code": "test_recovery"
+    },
+    {
+      "timestamp": 1792165578,
+      "level": "warn",
+      "stage": "recovery",
+      "message": "Job reloaded after domain reload and will resume automatically.",
+      "code": "domain_reload_recovery"
+    },
+    {
+      "timestamp": 1792165578,
+      "level": "info",
+      "stage": "reconnected",
+      "message": "Reconnected to EditMode tests after domain reload.",
+      "code": "test_recovery"
+    },
+    {
+      "timestamp": 1792165587,
+      "level": "warn",
+      "stage": "recovery",
+      "message": "Job reloaded after domain reload and will resume automatically.",
+      "code": "domain_reload_recovery"
+    },
+    {
+      "timestamp": 1792165587,
+      "level": "info",
+      "stage": "reconnected",
+      "message": "Reconnected to EditMode tests after domain reload.",
+      "code": "test_recovery"
+    },
+    {
+      "timestamp": 1792165596,
+      "level": "warn",
+      "stage": "recovery",
+      "message": "Job reloaded after domain reload and will resume automatically.",
+      "code": "domain_reload_recovery"
+    },
+    {
+      "timestamp": 1792165596,
+      "level": "info",
+      "stage": "reconnected",
+      "message": "Reconnected to EditMode tests after domain reload.",
+      "code": "test_recovery"
+    },
+    {
+      "timestamp": 1792165606,
+      "level": "warn",
+      "stage": "recovery",
+      "message": "Job reloaded after domain reload and will resume automatically.",
+      "code": "domain_reload_recovery"
+    },
+    {
+      "timestamp": 1792165606,
+      "level": "info",
+      "stage": "reconnected",
+      "message": "Reconnected to EditMode tests after domain reload.",
+      "code": "test_recovery"
+    },
+    {
+      "timestamp": 1792165611,
+      "level": "info",
+      "stage": "collecting_results",
+      "message": "Collecting final Unity Test Runner results.",
+      "code": "test_collecting"
+    },
+    {
+      "timestamp": 1792165611,
+      "level": "info",
+      "stage": "completed",
+      "message": "Test run completed: 10/10 passed.",
+      "code": "job_completed"
+    }
+  ],
+  "progressStage": "completed",
+  "progressGranularity": 10,
+  "progressEvents": [
+    {
+      "timestamp": 1792165503,
+      "progress": 0,
+      "stage": "queued",
+      "description": "Test run accepted and waiting to start."
+    },
+    {
+      "timestamp": 1792165503,
+      "progress": 1,
+      "stage": "starting",
+      "description": "Launching Unity Test Runner."
+    },
+    {
+      "timestamp": 1792165508,
+      "progress": 10,
+      "stage": "reconnected",
+      "description": "Reconnected to EditMode tests after domain reload."
+    },
+    {
+      "timestamp": 1792165533,
+      "progress": 10,
+      "stage": "reconnected",
+      "description": "Reconnected to EditMode tests after domain reload."
+    },
+    {
+      "timestamp": 1792165542,
+      "progress": 10,
+      "stage": "reconnected",
+      "description": "Reconnected to EditMode tests after domain reload."
+    },
+    {
+      "timestamp": 1792165551,
+      "progress": 10,
+      "stage": "reconnected",
+      "description": "Reconnected to EditMode tests after domain reload."
+    },
+    {
+      "timestamp": 1792165560,
+      "progress": 10,
+      "stage": "reconnected",
+      "description": "Reconnected to EditMode tests after domain reload."
+    },
+    {
+      "timestamp": 1792165569,
+      "progress": 10,
+      "stage": "reconnected",
+      "description": "Reconnected to EditMode tests after domain reload."
+    },
+    {
+      "timestamp": 1792165578,
+      "progress": 10,
+      "stage": "reconnected",
+      "description": "Reconnected to EditMode tests after domain reload."
+    },
+    {
+      "timestamp": 1792165587,
+      "progress": 10,
+      "stage": "reconnected",
+      "description": "Reconnected to EditMode tests after domain reload."
+    },
+    {
+      "timestamp": 1792165596,
+      "progress": 10,
+      "stage": "reconnected",
+      "description": "Reconnected to EditMode tests after domain reload."
+    },
+    {
+      "timestamp": 1792165606,
+      "progress": 10,
+      "stage": "reconnected",
+      "description": "Reconnected to EditMode tests after domain reload."
+    },
+    {
+      "timestamp": 1792165611,
+      "progress": 95,
+      "stage": "collecting_results",
+      "description": "Collecting final Unity Test Runner results."
+    },
+    {
+      "timestamp": 1792165611,
+      "progress": 100,
+      "stage": "completed",
+      "description": "Test run completed: 10/10 passed."
+    }
+  ]
+}

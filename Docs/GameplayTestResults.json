@@ -1,0 +1,44 @@
+{
+  "recordedAt": "2026-10-16T22:47:45.7141694+08:00",
+  "unityVersion": "2022.3.48f1",
+  "scene": "Assets/Scenes/Free Look character.unity",
+  "testResult": {
+    "success": true,
+    "jobId": "708f00bf",
+    "status": "completed",
+    "totalTests": 23,
+    "passedTests": 23,
+    "failedTests": 0,
+    "skippedTests": 0,
+    "inconclusiveTests": 0,
+    "otherTests": 0,
+    "failedTestNames": [],
+    "failedTestDetails": [],
+    "elapsedSeconds": 161,
+    "resultSummary": "Test run completed: 23/23 passed.",
+    "error": null
+  },
+  "console": {
+    "count": 0,
+    "logs": []
+  },
+  "editorContext": {
+    "success": true,
+    "selectedGameObjects": {
+      "count": 0,
+      "objects": []
+    },
+    "selectedAssets": {
+      "count": 0,
+      "assets": []
+    },
+    "activeScene": {
+      "name": "Free Look character",
+      "path": "Assets/Scenes/Free Look character.unity",
+      "isDirty": false
+    },
+    "focusedWindow": "UnitySkillsWindow",
+    "isPlaying": false,
+    "isCompiling": false
+  }
+}

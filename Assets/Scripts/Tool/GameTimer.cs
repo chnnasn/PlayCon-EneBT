@@ -37,9 +37,11 @@ public class GameTimer
         _startTime-=Time.deltaTime;
         if (_startTime <= 0)
         { 
-            _task?.Invoke();
+            var completedTask = _task;
+            _task = null;
             _isStopTime = true;
             _timerStation = TimerStation.DoneWorked;
+            completedTask?.Invoke();
         }
     }
     /// <summary>
@@ -53,9 +55,11 @@ public class GameTimer
         _startTime -= Time.unscaledDeltaTime;
         if (_startTime <= 0)
         {
-            _task?.Invoke();
+            var completedTask = _task;
+            _task = null;
             _isStopTime = true;
             _timerStation = TimerStation.DoneWorked;
+            completedTask?.Invoke();
         }
     }
     public void InitTimer() 

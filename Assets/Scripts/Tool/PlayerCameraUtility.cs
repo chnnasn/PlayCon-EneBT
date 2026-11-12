@@ -19,27 +19,21 @@ namespace Tools
 
         public void EnableRecentering(float waitTime = -1f, float recenteringTime = -1f)
         {
+            if (cinemachinePOV == null) return;
             cinemachinePOV.m_HorizontalRecentering.m_enabled = true;
-
-            if (waitTime == -1f)
-            {
-                cinemachinePOV.m_HorizontalRecentering.m_WaitTime = DefaultHorizontalWaitTime;
-            }
-            if (recenteringTime == -1f)
-            {
-                cinemachinePOV.m_HorizontalRecentering.m_RecenteringTime = DefaultHorizontalRecenteringTime;
-            }
-            cinemachinePOV.m_HorizontalRecentering.m_WaitTime = DefaultHorizontalWaitTime;
-            cinemachinePOV.m_HorizontalRecentering.m_RecenteringTime = DefaultHorizontalRecenteringTime;
+            cinemachinePOV.m_HorizontalRecentering.m_WaitTime = waitTime < 0f ? DefaultHorizontalWaitTime : waitTime;
+            cinemachinePOV.m_HorizontalRecentering.m_RecenteringTime = recenteringTime < 0f ? DefaultHorizontalRecenteringTime : recenteringTime;
         }
         public void DisableRecentering()
         {
+            if (cinemachinePOV == null) return;
             cinemachinePOV.m_HorizontalRecentering.m_enabled = false;
             //Debug.Log("水平居中相机关闭！");
         }
 
         public void Init()
         {
+            if (virtualCamera == null) return;
             cinemachinePOV = virtualCamera.GetCinemachineComponent<CinemachinePOV>();
             inputProvider = virtualCamera.GetComponent<CinemachineInputProvider>();
             if (!ResetAxisOnInit || cinemachinePOV == null)

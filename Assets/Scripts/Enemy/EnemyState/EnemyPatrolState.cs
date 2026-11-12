@@ -4,6 +4,7 @@ public class EnemyPatrolState : EnemyState
 {
     private Vector3 patrolTarget;
     private bool waitingForIdleTranslate;
+    private float idleReturnTimer;
 
     public EnemyPatrolState(EnemyStateMachine machine) : base(machine)
     {
@@ -14,6 +15,8 @@ public class EnemyPatrolState : EnemyState
         enemy.EndChaseLock();
         patrolTarget = enemy.GetRandomPatrolPoint();
         waitingForIdleTranslate = false;
+        idleReturnTimer = 0f;
+        enemy.ResetMovementProgress();
         var data = enemy.Data;
         enemy.CrossFadeState(data.moveStartStateName, data.moveStartCrossFade);
         enemy.SetOffset(true);
@@ -35,6 +38,9 @@ public class EnemyPatrolState : EnemyState
             enemy.SetOffset(false);
             enemy.SetLock(enemy.Data.lockValueIdle);
             enemy.SetMovement(0f);
+            idleReturnTimer += Time.deltaTime;
+            if (idleReturnTimer >= EnemyBehaviorTree.PatrolIdleReturnTimeout)
+                stateMachine.ChangeState(stateMachine.idleState);
             return;
         }
 
@@ -42,6 +48,11 @@ public class EnemyPatrolState : EnemyState
         enemy.SetLock(enemy.Data.lockValueMove);
         enemy.SetMovement(enemy.Data.patrolMovementValue);
         enemy.MoveRootMotionTowards(patrolTarget, enemy.Data.patrolSpeed);
+        if (enemy.MovementIsBlocked)
+        {
+            stateMachine.ChangeState(stateMachine.idleState);
+            return;
+        }
         if (!enemy.HasReached(patrolTarget))
         {
             return;
@@ -57,6 +68,11 @@ public class EnemyPatrolState : EnemyState
         enemy.SetOffset(false);
         enemy.SetLock(enemy.Data.lockValueIdle);
         enemy.SetMovement(0f);
+    }
+
+    public override void OnAnimationExitEvent()
+    {
+        if (waitingForIdleTranslate) idleReturnTimer = EnemyBehaviorTree.PatrolIdleReturnTimeout;
     }
     
 }

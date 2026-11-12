@@ -1,4 +1,4 @@
-using BT; // v2-recompile
+using BT;
 using UnityEngine;
 
 /// <summary>
@@ -51,6 +51,7 @@ public class EnemyBehaviorTree
 
     /// <summary>受击请求（由 EnemyHeath 转发）。</summary>
     private bool hitRequested;
+    private bool hitActive;
 
     /// <summary>警戒期间记录的最后目击玩家位置。</summary>
     private Vector3 lastSeenPlayerPos;
@@ -59,11 +60,9 @@ public class EnemyBehaviorTree
     private bool investigateRequested;
     private Vector3 investigatePoint;
 
-    /// <summary>战斗标记：咆哮请求、本回合是否已咆哮、撕咬/爪击冷却。</summary>
+    /// <summary>战斗标记：咆哮请求、本回合是否已咆哮、定位冷却。攻击冷却由共享执行器负责。</summary>
     private bool roarRequested;
     private bool hasRoaredInCombat;
-    private float biteCooldownTimer;
-    private float clawCooldownTimer;
     private float repositionCooldownTimer;
 
     /// <summary>返回巢穴请求。</summary>
@@ -92,11 +91,31 @@ public class EnemyBehaviorTree
 
     /// <summary>是否处于破防状态（伤害倍率等外部逻辑依赖此状态）。</summary>
     public bool IsBreakActive => breakActive;
+    public bool IsHitReactionDeferred => !hasSpawned || retreatRequested || breakRequested || breakActive;
 
     public void Update()
     {
         TickCooldowns();
         root.Tick();
+    }
+
+    public void Reset()
+    {
+        root.Reset();
+        enemy.CancelAttack();
+        idleAnimationExited = breakRequested = breakActive = retreatRequested = hitRequested = hitActive = false;
+        investigateRequested = roarRequested = hasRoaredInCombat = returnToLairRequested = false;
+        retreatPlayer = null;
+        hasSpawned = false;
+        repositionCooldownTimer = 0f;
+        CurrentBehavior = nameof(EnemyIdleState);
+    }
+
+    public void RequestReturnToLair()
+    {
+        enemy.CancelAttack();
+        investigateRequested = roarRequested = false;
+        returnToLairRequested = true;
     }
 
     /// <summary>玩家"一笔画"后撤指令。</summary>
@@ -117,12 +136,14 @@ public class EnemyBehaviorTree
     /// <summary>破防指令（由 CharacterHealthBase 转发）。</summary>
     public void RequestBreak()
     {
+        hitRequested = false;
         breakRequested = true;
     }
 
     /// <summary>受击指令（由 EnemyHeath 转发）。</summary>
     public void RequestHit(Transform attacker)
     {
+        if (enemy.IsDead || breakRequested || breakActive) return;
         hitRequested = true;
         if (attacker != null)
         {
@@ -154,7 +175,7 @@ public class EnemyBehaviorTree
 
             case AnimationState.Hit:
                 // 受击状态中：Hit 动画退出即结束受击。
-                if (hitRequested)
+                if (hitActive)
                 {
                     hitRequested = false;
                     return;
@@ -166,13 +187,6 @@ public class EnemyBehaviorTree
                     return;
                 }
 
-                var player = Object.FindObjectOfType<Player>();
-                if (player == null)
-                {
-                    return;
-                }
-
-                enemy.BeginChaseLock(player.transform);
                 break;
         }
     }
@@ -190,44 +204,10 @@ public class EnemyBehaviorTree
 
     private void TickCooldowns()
     {
-        if (biteCooldownTimer > 0f)
-        {
-            biteCooldownTimer = Mathf.Max(0f, biteCooldownTimer - Time.deltaTime);
-        }
-
-        if (clawCooldownTimer > 0f)
-        {
-            clawCooldownTimer = Mathf.Max(0f, clawCooldownTimer - Time.deltaTime);
-        }
-
         if (repositionCooldownTimer > 0f)
         {
             repositionCooldownTimer = Mathf.Max(0f, repositionCooldownTimer - Time.deltaTime);
         }
-    }
-
-    /// <summary>是否满足攻击条件：有锁定目标且处于攻击范围内，且技能不在冷却。</summary>
-    private bool CanUseAttack(float range, float cooldownTimer)
-    {
-        // 攻击动画播放中不允许切换新攻击，避免动画中途被打断。
-        if (enemy.IsAttackAnimationPlaying)
-        {
-            return false;
-        }
-
-        if (cooldownTimer > 0f)
-        {
-            return false;
-        }
-
-        if (!enemy.HasChaseLock || enemy.ChaseTarget == null)
-        {
-            return false;
-        }
-
-        var flatDelta = enemy.ChaseTarget.position - enemy.transform.position;
-        flatDelta.y = 0f;
-        return flatDelta.sqrMagnitude <= range * range;
     }
 
     // ================= 组合节点 =================
@@ -270,6 +250,7 @@ public class EnemyBehaviorTree
             }
 
             tree.SetBehavior("EnemyDeadState");
+            enemy.CancelAttack();
             var data = enemy.Data;
             enemy.EndChaseLock();
             enemy.CrossFadeState(data.deadStateName, data.deadCrossFade);
@@ -388,12 +369,6 @@ public class EnemyBehaviorTree
             }
 
             tree.breakRequested = false;
-            var player = Object.FindObjectOfType<Player>();
-            if (player != null)
-            {
-                enemy.BeginChaseLock(player.transform);
-            }
-
             return NodeStatus.Success;
         }
 
@@ -407,6 +382,7 @@ public class EnemyBehaviorTree
             enemy.SetBreak(false);
             enemy.SetDamageTakenMultiplier(1f);
             tree.breakActive = false;
+            tree.breakRequested = false;
         }
     }
 
@@ -430,6 +406,7 @@ public class EnemyBehaviorTree
             }
 
             tree.SetBehavior(nameof(EnemyRetreatState));
+            enemy.CancelAttack();
 
             var data = enemy.Data;
             enemy.CrossFadeState(data != null ? data.retreatStateName : "Retreat", data != null ? data.moveStartCrossFade : 0.1f);
@@ -511,6 +488,8 @@ public class EnemyBehaviorTree
             }
 
             tree.SetBehavior("EnemyHitState");
+            tree.hitActive = true;
+            enemy.CancelAttack();
             var data = enemy.Data;
             enemy.CrossFadeState(data.hitStateName, data.hitCrossFade);
             enemy.SetOffset(false);
@@ -536,6 +515,12 @@ public class EnemyBehaviorTree
             }
 
             return NodeStatus.Running;
+        }
+
+        protected override void OnExit()
+        {
+            tree.hitActive = false;
+            tree.hitRequested = false;
         }
     }
 
@@ -623,6 +608,8 @@ public class EnemyBehaviorTree
                 enemy.SnapRotateTowards(flatDir);
             }
         }
+
+        protected override void OnExit() => tree.roarRequested = false;
     }
 
     /// <summary>攻击前定位：过近则后撤拉开、过远则前进逼近，调整到理想攻击距离后再出手。</summary>
@@ -642,6 +629,11 @@ public class EnemyBehaviorTree
 
         protected override void OnEnter()
         {
+            repositioning = false;
+            retreating = false;
+            repositionTimer = 0f;
+            // Navigation combat positions own approach spacing for both FSM and BT.
+            if (enemy.HasNavigation) return;
             if (tree.repositionCooldownTimer > 0f)
             {
                 return;
@@ -653,7 +645,7 @@ public class EnemyBehaviorTree
             }
 
             // 攻击动画播放中不做定位，避免打断。
-            if (enemy.IsAttackAnimationPlaying)
+            if (enemy.IsAttacking || enemy.IsAttackAnimationPlaying)
             {
                 return;
             }
@@ -673,6 +665,7 @@ public class EnemyBehaviorTree
             repositioning = true;
             retreating = distance < data.repositionRetreatThreshold;
             repositionTimer = data.repositionDuration;
+            enemy.ResetMovementProgress();
 
             tree.SetBehavior("EnemyRepositionState");
 
@@ -710,6 +703,11 @@ public class EnemyBehaviorTree
             }
 
             repositionTimer -= Time.deltaTime;
+            if (enemy.MovementIsBlocked)
+            {
+                enemy.RequestReturnToLair();
+                return NodeStatus.Failure;
+            }
             var distance = FlatDistanceToTarget();
             var reached = retreating
                 ? distance >= data.repositionRetreatThreshold
@@ -725,6 +723,13 @@ public class EnemyBehaviorTree
             return NodeStatus.Running;
         }
 
+        protected override void OnExit()
+        {
+            repositioning = false;
+            retreating = false;
+            repositionTimer = 0f;
+        }
+
         private float FlatDistanceToTarget()
         {
             if (enemy.ChaseTarget == null)
@@ -738,188 +743,50 @@ public class EnemyBehaviorTree
         }
     }
 
-    /// <summary>撕咬：玩家进入撕咬范围且冷却完毕时攻击。</summary>
-    private sealed class BiteNode : BTNode
+    /// <summary>Both attack leaves delegate timing, hit validation and cooldowns to the shared executor.</summary>
+    private abstract class AttackNode : BTNode
     {
         private readonly EnemyBehaviorTree tree;
-        private readonly Enemy enemy;
-        private bool attacking;
-        private bool sawAttackState;
-        private float biteCountdown;
+        private readonly EnemyAttackKind kind;
+        private readonly string behaviorName;
+        private bool started;
+        private int attackVersion;
 
-        public BiteNode(EnemyBehaviorTree tree)
+        protected AttackNode(EnemyBehaviorTree tree, EnemyAttackKind kind, string behaviorName)
         {
             this.tree = tree;
-            enemy = tree.enemy;
+            this.kind = kind;
+            this.behaviorName = behaviorName;
         }
 
         protected override void OnEnter()
         {
-            attacking = tree.CanUseAttack(enemy.Data.biteRange, tree.biteCooldownTimer);
-            if (!attacking)
-            {
-                return;
-            }
-
-            tree.SetBehavior("EnemyBiteState");
-            var data = enemy.Data;
-            enemy.CrossFadeState(data.biteStateName, data.biteCrossFade);
-            enemy.SetOffset(false);
-            enemy.SetLock(data.lockValueIdle);
-            enemy.SetMovement(0f);
-            FaceTargetDuringAttack();
-            biteCountdown = data.biteDuration + AttackAnimationGraceSeconds;
-            sawAttackState = false;
+            started = tree.enemy.TryStartAttack(kind);
+            attackVersion = tree.enemy.AttackVersion;
+            if (started) tree.SetBehavior(behaviorName);
         }
 
         protected override NodeStatus OnExecute()
         {
-            if (!attacking)
-            {
-                return NodeStatus.Failure;
-            }
-
-            enemy.SetMovement(0f);
-            FaceTargetDuringAttack();
-
-            // 攻击动画播放中：保持攻击状态直到动画自然播完，避免中途被下一个攻击打断。
-            if (enemy.IsAttackAnimationPlaying)
-            {
-                if (!sawAttackState)
-                {
-                    sawAttackState = true;
-                    var stateLength = enemy.GetAnimator().GetCurrentAnimatorStateInfo(0).length;
-                    biteCountdown = Mathf.Max(enemy.Data.biteDuration, stateLength + AttackAnimationGraceSeconds);
-                }
-            }
-
-            biteCountdown -= Time.deltaTime;
-
-            if (sawAttackState && !enemy.IsAttackAnimationPlaying)
-            {
-                // 动画已播完并离开攻击状态。
-                tree.biteCooldownTimer = enemy.Data.biteCooldown;
-                attacking = false;
-                return NodeStatus.Success;
-            }
-
-            if (biteCountdown <= 0f)
-            {
-                // 兜底：动画状态异常时防止卡死。
-                tree.biteCooldownTimer = enemy.Data.biteCooldown;
-                attacking = false;
-                return NodeStatus.Success;
-            }
-
-            return NodeStatus.Running;
+            if (!started) return NodeStatus.Failure;
+            return tree.enemy.IsAttacking && tree.enemy.AttackVersion == attackVersion ? NodeStatus.Running : NodeStatus.Success;
         }
 
-        private void FaceTargetDuringAttack()
+        protected override void OnExit()
         {
-            if (enemy.ChaseTarget == null)
-            {
-                return;
-            }
-
-            var flatDir = enemy.ChaseTarget.position - enemy.transform.position;
-            flatDir.y = 0f;
-            if (flatDir.sqrMagnitude > 0.0001f)
-            {
-                enemy.SnapRotateTowards(flatDir);
-            }
+            if (started) tree.enemy.CancelAttack(attackVersion);
+            started = false;
         }
     }
 
-    /// <summary>爪击：玩家进入爪击范围且冷却完毕时攻击。</summary>
-    private sealed class ClawNode : BTNode
+    private sealed class BiteNode : AttackNode
     {
-        private readonly EnemyBehaviorTree tree;
-        private readonly Enemy enemy;
-        private bool attacking;
-        private bool sawAttackState;
-        private float clawCountdown;
+        public BiteNode(EnemyBehaviorTree tree) : base(tree, EnemyAttackKind.Bite, "EnemyBiteState") { }
+    }
 
-        public ClawNode(EnemyBehaviorTree tree)
-        {
-            this.tree = tree;
-            enemy = tree.enemy;
-        }
-
-        protected override void OnEnter()
-        {
-            attacking = tree.CanUseAttack(enemy.Data.clawRange, tree.clawCooldownTimer);
-            if (!attacking)
-            {
-                return;
-            }
-
-            tree.SetBehavior("EnemyClawState");
-            var data = enemy.Data;
-            enemy.CrossFadeState(data.clawStateName, data.clawCrossFade);
-            enemy.SetOffset(false);
-            enemy.SetLock(data.lockValueIdle);
-            enemy.SetMovement(0f);
-            FaceTargetDuringAttack();
-            clawCountdown = data.clawDuration + AttackAnimationGraceSeconds;
-            sawAttackState = false;
-        }
-
-        protected override NodeStatus OnExecute()
-        {
-            if (!attacking)
-            {
-                return NodeStatus.Failure;
-            }
-
-            enemy.SetMovement(0f);
-            FaceTargetDuringAttack();
-
-            // 攻击动画播放中：保持攻击状态直到动画自然播完，避免中途被下一个攻击打断。
-            if (enemy.IsAttackAnimationPlaying)
-            {
-                if (!sawAttackState)
-                {
-                    sawAttackState = true;
-                    var stateLength = enemy.GetAnimator().GetCurrentAnimatorStateInfo(0).length;
-                    clawCountdown = Mathf.Max(enemy.Data.clawDuration, stateLength + AttackAnimationGraceSeconds);
-                }
-            }
-
-            clawCountdown -= Time.deltaTime;
-
-            if (sawAttackState && !enemy.IsAttackAnimationPlaying)
-            {
-                // 动画已播完并离开攻击状态。
-                tree.clawCooldownTimer = enemy.Data.clawCooldown;
-                attacking = false;
-                return NodeStatus.Success;
-            }
-
-            if (clawCountdown <= 0f)
-            {
-                // 兜底：动画状态异常时防止卡死。
-                tree.clawCooldownTimer = enemy.Data.clawCooldown;
-                attacking = false;
-                return NodeStatus.Success;
-            }
-
-            return NodeStatus.Running;
-        }
-
-        private void FaceTargetDuringAttack()
-        {
-            if (enemy.ChaseTarget == null)
-            {
-                return;
-            }
-
-            var flatDir = enemy.ChaseTarget.position - enemy.transform.position;
-            flatDir.y = 0f;
-            if (flatDir.sqrMagnitude > 0.0001f)
-            {
-                enemy.SnapRotateTowards(flatDir);
-            }
-        }
+    private sealed class ClawNode : AttackNode
+    {
+        public ClawNode(EnemyBehaviorTree tree) : base(tree, EnemyAttackKind.Claw, "EnemyClawState") { }
     }
 
     /// <summary>追击：锁定目标持续靠近；超出追击距离或失去锁定时放弃并返回巢穴。</summary>
@@ -944,6 +811,7 @@ public class EnemyBehaviorTree
             }
 
             tree.SetBehavior(nameof(EnemyChaseState));
+            enemy.ResetMovementProgress();
 
             enemy.SetMovement(0f);
             var data = enemy.Data;
@@ -970,8 +838,7 @@ public class EnemyBehaviorTree
             flatDelta.y = 0f;
             if (data.chaseGiveUpDistance > 0f && flatDelta.sqrMagnitude > data.chaseGiveUpDistance * data.chaseGiveUpDistance)
             {
-                enemy.EndChaseLock();
-                tree.returnToLairRequested = true;
+                enemy.RequestReturnToLair();
                 return NodeStatus.Failure;
             }
 
@@ -993,8 +860,15 @@ public class EnemyBehaviorTree
             var speed = shouldRun ? data.chaseSpeed : data.chaseWalkSpeed;
             enemy.SetOffset(true);
             enemy.SetLock(data.chaseLockValue);
-            enemy.FaceTargetThenMove(enemy.ChaseTarget.position, speed, data.combatRotationTime);
-            enemy.SetMovement(0f);
+            enemy.MoveInPursuit(speed);
+            // Navigation publishes actual movement in LateUpdate. Preserve it until animation
+            // evaluation next frame instead of overwriting it with zero on every BT tick.
+            if (!enemy.HasNavigation) enemy.SetMovement(0f);
+            if (enemy.MovementIsBlocked)
+            {
+                enemy.RequestReturnToLair();
+                return NodeStatus.Failure;
+            }
             return NodeStatus.Running;
         }
     }
@@ -1111,6 +985,7 @@ public class EnemyBehaviorTree
             }
 
             tree.SetBehavior("EnemyInvestigateState");
+            enemy.ResetMovementProgress();
             var data = enemy.Data;
             enemy.CrossFadeState(data.moveStartStateName, data.moveStartCrossFade);
             enemy.SetOffset(true);
@@ -1136,6 +1011,12 @@ public class EnemyBehaviorTree
                 enemy.SetMovement(data.patrolMovementValue);
                 enemy.FaceTargetThenMove(tree.investigatePoint, data.investigateSpeed);
 
+                if (enemy.MovementIsBlocked)
+                {
+                    enemy.RequestReturnToLair();
+                    return NodeStatus.Failure;
+                }
+
                 if (enemy.HasReached(tree.investigatePoint, data.investigateArriveDistance))
                 {
                     movingToPoint = false;
@@ -1159,7 +1040,7 @@ public class EnemyBehaviorTree
             if (lookTimer >= data.investigateDuration)
             {
                 tree.investigateRequested = false;
-                tree.returnToLairRequested = true;
+                enemy.RequestReturnToLair();
                 return NodeStatus.Success;
             }
 
@@ -1172,6 +1053,7 @@ public class EnemyBehaviorTree
     {
         private readonly EnemyBehaviorTree tree;
         private readonly Enemy enemy;
+        private float returnTimer;
 
         public ReturnToLairNode(EnemyBehaviorTree tree)
         {
@@ -1188,6 +1070,8 @@ public class EnemyBehaviorTree
 
             tree.SetBehavior("EnemyReturnToLairState");
             tree.hasRoaredInCombat = false;
+            returnTimer = 0f;
+            enemy.ResetMovementProgress();
 
             enemy.EndChaseLock();
             var data = enemy.Data;
@@ -1209,10 +1093,12 @@ public class EnemyBehaviorTree
             enemy.SetLock(data.lockValueMove);
             enemy.SetMovement(data.patrolMovementValue);
             enemy.FaceTargetThenMove(enemy.PatrolAreaCenter, data.lairReturnSpeed);
+            returnTimer += Time.deltaTime;
 
-            if (enemy.HasReached(enemy.PatrolAreaCenter, data.lairArriveDistance))
+            if (enemy.HasReached(enemy.PatrolAreaCenter, data.lairArriveDistance) || enemy.MovementIsBlocked || returnTimer >= Mathf.Max(1f, data.returnTimeout))
             {
                 tree.returnToLairRequested = false;
+                enemy.FinishReturnToLair();
                 return NodeStatus.Success;
             }
 
@@ -1273,6 +1159,7 @@ public class EnemyBehaviorTree
         protected override void OnEnter()
         {
             tree.SetBehavior(nameof(EnemyPatrolState));
+            enemy.ResetMovementProgress();
 
             enemy.EndChaseLock();
             patrolTarget = enemy.GetRandomPatrolPoint();
@@ -1309,6 +1196,11 @@ public class EnemyBehaviorTree
             enemy.SetLock(enemy.Data.lockValueMove);
             enemy.SetMovement(enemy.Data.patrolMovementValue);
             enemy.MoveRootMotionTowards(patrolTarget, enemy.Data.patrolSpeed);
+
+            if (enemy.MovementIsBlocked)
+            {
+                return NodeStatus.Success;
+            }
 
             if (enemy.HasReached(patrolTarget))
             {

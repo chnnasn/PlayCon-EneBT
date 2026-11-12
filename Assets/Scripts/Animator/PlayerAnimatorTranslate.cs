@@ -19,20 +19,23 @@ public  enum AnimationState
 public class PlayerAnimatorTranslate : StateMachineBehaviour
 {
     Player player;
+    private readonly Queue<Player.AnimationStateBinding> entries = new Queue<Player.AnimationStateBinding>();
+    private int animationSession = -1;
 
     [SerializeField] public  AnimationState onEnterAnimationState;
         
     override public void OnStateEnter(Animator animator, AnimatorStateInfo stateInfo, int layerIndex)
     {
         
-        if (onEnterAnimationState == AnimationState.Null)
+        if (layerIndex == 0 && animator.TryGetComponent<Player>(out player) && player.CanAcceptInput)
         {
-            return;
-        }
-
-        if (animator.TryGetComponent<Player>(out player))
-        {
+            if (animationSession != player.AnimationSession)
+            {
+                entries.Clear();
+                animationSession = player.AnimationSession;
+            }
             player.OnAnimationEnterEvent(onEnterAnimationState);
+            entries.Enqueue(player.CaptureAnimationBinding());
         }
     }
 
@@ -40,9 +43,10 @@ public class PlayerAnimatorTranslate : StateMachineBehaviour
     override public void OnStateExit(Animator animator, AnimatorStateInfo stateInfo, int layerIndex)
     {
         
-        if (animator.TryGetComponent<Player>(out player))
+        if (layerIndex == 0 && animator.TryGetComponent<Player>(out player) &&
+            animationSession == player.AnimationSession && entries.Count > 0)
         {
-            player.OnAnimationExitEvent();
+            player.OnAnimationExitEvent(entries.Dequeue());
         }
     }
     

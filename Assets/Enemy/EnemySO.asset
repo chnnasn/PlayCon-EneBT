@@ -17,7 +17,7 @@ MonoBehaviour:
     m_Bits: 64
   obstacleMask:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 9
   viewDistance: 12
   viewAngle: 90
   eyeHeight: 0
@@ -73,6 +73,13 @@ MonoBehaviour:
   biteDuration: 0.8
   clawDuration: 0.8
   roarDuration: 1
+  biteDamage: 12
+  clawDamage: 8
+  biteWindup: 0.4
+  clawWindup: 0.3
+  attackAngle: 100
+  attackHeightTolerance: 1.5
+  playerHitStateName: Hit
   investigateSpeed: 2.5
   investigateDuration: 2
   investigateArriveDistance: 0.5
@@ -80,6 +87,11 @@ MonoBehaviour:
   hitCrossFade: 0.1
   hitDuration: 0.5
   chaseGiveUpDistance: 18
+  homeLeashDistance: 20
+  lostSightTimeout: 2
+  movementBlockedTimeout: 1.5
+  reacquireDelay: 3
+  returnTimeout: 12
   lairReturnSpeed: 3
   lairArriveDistance: 0.5
   deadStateName: Dead

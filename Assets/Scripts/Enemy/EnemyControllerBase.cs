@@ -16,13 +16,20 @@ public abstract class EnemyControllerBase : ControllerBase
     public bool HasTargetInSight { get; protected set; }
     public Transform Target => target;
     public EnemySO Data => enemySO;
+    public ActorNavigation Navigation { get; private set; }
+    public bool HasNavigation => Navigation != null && Navigation.isActiveAndEnabled && Navigation.IsConfigured;
 
     private readonly Collider[] scanHits = new Collider[maxScanTargets];
-    private float lastRootMotionSqr;
+    private readonly RaycastHit[] sightHits = new RaycastHit[32];
+    private float threatSuppressedUntil;
+    public float MovementBlockedFor { get; private set; }
+    public bool MovementIsBlocked => HasNavigation && Navigation.HasFailed ||
+        MovementBlockedFor >= Mathf.Max(0.1f, Data != null ? Data.movementBlockedTimeout : 1.5f);
 
     protected override void Awake()
     {
         base.Awake();
+        Navigation = GetComponent<ActorNavigation>();
         if (enemySO == null)
         {
             Debug.LogError($"{GetType().Name} missing {nameof(EnemySO)} reference.", this);
@@ -37,12 +44,78 @@ public abstract class EnemyControllerBase : ControllerBase
 
     public void MoveInDirection(Vector3 direction, float speed)
     {
-        if (direction.sqrMagnitude < 0.0001f)
+        direction.y = 0f;
+        if (!CanMove || characterController == null || !characterController.enabled || direction.sqrMagnitude < 0.0001f || speed <= 0f)
         {
             return;
         }
+        var displacement = direction.normalized * speed * Time.deltaTime;
+        var before = transform.position;
+        characterController.Move(displacement);
+        var progress = Vector3.Dot(transform.position - before, displacement.normalized);
+        MovementBlockedFor = progress < displacement.magnitude * 0.1f ? MovementBlockedFor + Time.deltaTime : 0f;
+    }
 
-        characterController.Move(direction.normalized * speed * Time.deltaTime);
+    public void ResetMovementProgress()
+    {
+        MovementBlockedFor = 0f;
+        Navigation?.ResetProgress();
+    }
+
+    public void SuppressThreats(float seconds)
+    {
+        threatSuppressedUntil = Time.time + Mathf.Max(0f, seconds);
+        target = null;
+        HasTargetInSight = false;
+    }
+
+    public static bool IsValidTarget(Transform candidate)
+    {
+        if (candidate == null || !candidate.gameObject.activeInHierarchy)
+        {
+            return false;
+        }
+
+        var health = candidate.GetComponentInParent<CharacterHealthBase>();
+        if (health == null || !health.isActiveAndEnabled || health.IsDead) return false;
+        var controller = health.GetComponent<ControllerBase>();
+        return controller == null || controller.isActiveAndEnabled;
+    }
+
+    public bool HasLineOfSight(Transform candidate)
+    {
+        if (!IsValidTarget(candidate))
+        {
+            return false;
+        }
+
+        // A zero mask on the existing asset means use solid scene geometry, not "see through everything".
+        var mask = Data != null && Data.obstacleMask.value != 0 ? Data.obstacleMask.value : Physics.DefaultRaycastLayers;
+        var eyeHeight = Mathf.Max(0.5f, Data != null ? Data.eyeHeight : 1f);
+        var origin = transform.position + Vector3.up * eyeHeight;
+        var destination = candidate.position + Vector3.up * eyeHeight;
+        var delta = destination - origin;
+        if (delta.sqrMagnitude < 0.0001f)
+        {
+            return true;
+        }
+
+        var count = Physics.RaycastNonAlloc(origin, delta.normalized, sightHits, delta.magnitude, mask, QueryTriggerInteraction.Ignore);
+        var targetHealth = candidate.GetComponentInParent<CharacterHealthBase>();
+        for (var i = 0; i < count; i++)
+        {
+            var hit = sightHits[i].transform;
+            if (hit == null || hit == transform || hit.IsChildOf(transform))
+            {
+                continue;
+            }
+            if (hit.GetComponentInParent<CharacterHealthBase>() == targetHealth)
+            {
+                continue;
+            }
+            return false;
+        }
+        return count < sightHits.Length; // A saturated buffer must not allow a hit through an unexamined wall.
     }
     
 
@@ -53,6 +126,11 @@ public abstract class EnemyControllerBase : ControllerBase
 
     public void FaceTargetThenMove(Vector3 worldPoint, float speed, float rotationTime)
     {
+        if (HasNavigation)
+        {
+            if (CanMove) Navigation.MoveTo(worldPoint, speed, Mathf.Min(0.2f, Data.arriveDistance));
+            return;
+        }
         var flatDirection = worldPoint - transform.position;
         flatDirection.y = 0f;
         if (flatDirection.sqrMagnitude < 0.0001f)
@@ -67,7 +145,7 @@ public abstract class EnemyControllerBase : ControllerBase
 
     public void CrossFadeState(string stateName, float transitionDuration)
     {
-        if (string.IsNullOrWhiteSpace(stateName))
+        if (characterAnimator == null || string.IsNullOrWhiteSpace(stateName))
         {
             return;
         }
@@ -77,12 +155,12 @@ public abstract class EnemyControllerBase : ControllerBase
 
     public void SetOffset(bool value)
     {
-        characterAnimator.SetBool(AnimID.OffsetID, value);
+        if (characterAnimator != null) characterAnimator.SetBool(AnimID.OffsetID, value);
     }
 
     public void SetBreak(bool value)
     {
-        characterAnimator.SetBool(AnimID.BreakD, value);
+        if (characterAnimator != null) characterAnimator.SetBool(AnimID.BreakD, value);
     }
 
     public void SetLock(float value)
@@ -97,20 +175,7 @@ public abstract class EnemyControllerBase : ControllerBase
 
     public void MoveRootMotionTowards(Vector3 worldPoint, float fallbackSpeed)
     {
-        var flatDirection = worldPoint - transform.position;
-        flatDirection.y = 0f;
-        if (flatDirection.sqrMagnitude < 0.0001f)
-        {
-            return;
-        }
-
-        var direction = flatDirection.normalized;
-        RotateTowards(direction);
-
-        if (lastRootMotionSqr <= 0.000001f)
-        {
-            characterController.Move(direction * fallbackSpeed * Time.deltaTime);
-        }
+        FaceTargetThenMove(worldPoint, fallbackSpeed);
     }
 
     public void RotateTowards(Vector3 direction)
@@ -180,6 +245,11 @@ public abstract class EnemyControllerBase : ControllerBase
 
     public bool ScanForThreat()
     {
+        if (Time.time < threatSuppressedUntil || !CanMove)
+        {
+            target = null;
+            return false;
+        }
         var eye = enemySO != null ? enemySO.eyeHeight : 1.2f;
         var origin = transform.position + Vector3.up * eye;
         var hitCount = Physics.OverlapSphereNonAlloc(
@@ -201,7 +271,12 @@ public abstract class EnemyControllerBase : ControllerBase
                 continue;
             }
 
-            var candidate = hit.transform;
+            var health = hit.GetComponentInParent<CharacterHealthBase>();
+            var candidate = health != null ? health.transform : null;
+            if (!IsValidTarget(candidate) || candidate == transform || candidate.GetComponent<Player>() == null)
+            {
+                continue;
+            }
             var candidatePos = candidate.position + Vector3.up * eye;
             var toCandidate = candidatePos - origin;
             var distance = toCandidate.magnitude;
@@ -217,12 +292,7 @@ public abstract class EnemyControllerBase : ControllerBase
                 continue;
             }
 
-            var blocked = Physics.Raycast(
-                origin,
-                toCandidate.normalized,
-                distance,
-                enemySO != null ? enemySO.obstacleMask : default,
-                QueryTriggerInteraction.Ignore);
+            var blocked = !HasLineOfSight(candidate);
 
             if (enemySO != null && enemySO.drawScanRays)
             {
@@ -245,21 +315,13 @@ public abstract class EnemyControllerBase : ControllerBase
 
     protected override void UpdateCharacterVelocity(Vector3 movement)
     {
-        var dir = ResetVelocityOnSlop(movement);
-        lastRootMotionSqr = dir.sqrMagnitude;
-        if (characterAnimator.AnimationAtTag("Movement"))
-        {
-            characterController.Move(dir);
-        }
-        else
-        {
-            lastRootMotionSqr = 0f;
-        }
+        // Enemy locomotion is authored in metres/second by the AI and applied once through CharacterController.
+        // Applying animation displacement here as well would bypass action cancellation and double movement.
     }
 
     protected override void OnAnimatorMove()
     {
-        base.OnAnimatorMove();
+        // Enemy steering owns both movement and facing; animation must not rotate it off the route.
     }
 
     private void SetAnimatorFloat(int parameterId, float value)
@@ -269,6 +331,6 @@ public abstract class EnemyControllerBase : ControllerBase
             value = 0f;
         }
 
-        characterAnimator.SetFloat(parameterId, value);
+        if (characterAnimator != null) characterAnimator.SetFloat(parameterId, value);
     }
 }

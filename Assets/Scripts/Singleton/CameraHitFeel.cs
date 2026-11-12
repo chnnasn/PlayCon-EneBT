@@ -1,130 +1,114 @@
 using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
 using Cinemachine;
 using Tools;
+using UnityEngine;
 
 public class CameraHitFeel : LazySingleton<CameraHitFeel>
 {
     [SerializeField] private Animator currentCharacterAnimator;
     [SerializeField] private Animator currentEnemyAnimator;
-    [SerializeField] private float slowMotionResetSpeed;
+    [SerializeField] private float slowMotionResetSpeed = 5f;
     [SerializeField] private CinemachineImpulseSource cinemachineImpulseSource;
-    
-    private void Start()
-    {
-        Init();
-    }
 
-    private void Init()
-    {
-
-
-    }
-
-    Coroutine PauseFrameCoroutine;
-    Coroutine SlowMotionCoroutine;
+    private Coroutine animationEffect;
+    private float characterOriginalSpeed = 1f;
+    private float enemyOriginalSpeed = 1f;
+    private bool ownsTimeScale;
+    private float originalTimeScale = 1f;
 
     public void PF(float time)
     {
-        if (time == 0) { Debug.Log("顿帧时间为0退出");return; }
-        currentEnemyAnimator= GetEnemyAnimator();
-        currentCharacterAnimator=GetCurrentCharacterAnimator();
-
-        if (currentCharacterAnimator == null )
-        {
-            Debug.Log("currentCharacterAnimator is null!");
-            return;
-        }
-        if (currentEnemyAnimator == null)
-        {
-            Debug.Log("currentEnemyAnimator is null!");
-            return;
-        }
-   
-
-        if (PauseFrameCoroutine != null)
-        { 
-        StopCoroutine(PauseFrameCoroutine);
-        }
-        PauseFrameCoroutine = StartCoroutine(PauseFrameOnAnimation(time));
+        if (time <= 0f || !BeginAnimationEffect()) return;
+        animationEffect = StartCoroutine(PauseAnimations(time));
     }
 
-    /// 动画特效的慢速
-    public void SlowMotion(float time,float speedMult)
+    public void SlowMotion(float time, float speedMult)
     {
-        currentEnemyAnimator = GetEnemyAnimator();
-        currentCharacterAnimator = GetCurrentCharacterAnimator();
-        if (currentCharacterAnimator == null || currentEnemyAnimator == null)
+        if (time <= 0f || !BeginAnimationEffect()) return;
+        animationEffect = StartCoroutine(SlowAnimations(time, Mathf.Clamp01(speedMult)));
+    }
+
+    private bool BeginAnimationEffect()
+    {
+        EndAnimationEffect();
+        var player = FindObjectOfType<Player>();
+        if (player == null || player.IsDead || player.CurrentEnemy == null || player.CurrentEnemy.IsDead)
+            return false;
+        // Use the actual combat target, not an arbitrary enemy in the scene.
+        currentCharacterAnimator = player.GetAnimator();
+        currentEnemyAnimator = player.CurrentEnemy.GetAnimator();
+        if (currentCharacterAnimator == null || currentEnemyAnimator == null) return false;
+        characterOriginalSpeed = currentCharacterAnimator.speed;
+        enemyOriginalSpeed = currentEnemyAnimator.speed;
+        return true;
+    }
+
+    private IEnumerator PauseAnimations(float time)
+    {
+        SetAnimationSpeed(0f);
+        yield return new WaitForSecondsRealtime(time);
+        RestoreAnimationSpeeds();
+        animationEffect = null;
+    }
+
+    private IEnumerator SlowAnimations(float time, float multiplier)
+    {
+        SetAnimationSpeed(multiplier);
+        yield return new WaitForSecondsRealtime(time);
+        while (multiplier < 0.999f)
         {
-            Debug.LogWarning("Animator is null!");
-            return;
+            multiplier = Mathf.MoveTowards(multiplier, 1f, Mathf.Max(0.1f, slowMotionResetSpeed) * Time.unscaledDeltaTime);
+            SetAnimationSpeed(multiplier);
+            yield return null;
         }
-        if (SlowMotionCoroutine != null)
-        { StopCoroutine(SlowMotionCoroutine); }
-        SlowMotionCoroutine = StartCoroutine(SlowMotionOnAnimation(time, speedMult));
+        RestoreAnimationSpeeds();
+        animationEffect = null;
     }
+
+    private void SetAnimationSpeed(float multiplier)
+    {
+        if (currentCharacterAnimator != null) currentCharacterAnimator.speed = characterOriginalSpeed * multiplier;
+        if (currentEnemyAnimator != null) currentEnemyAnimator.speed = enemyOriginalSpeed * multiplier;
+    }
+
+    private void RestoreAnimationSpeeds()
+    {
+        if (currentCharacterAnimator != null) currentCharacterAnimator.speed = characterOriginalSpeed;
+        if (currentEnemyAnimator != null) currentEnemyAnimator.speed = enemyOriginalSpeed;
+        currentCharacterAnimator = null;
+        currentEnemyAnimator = null;
+    }
+
+    private void EndAnimationEffect()
+    {
+        if (animationEffect != null) StopCoroutine(animationEffect);
+        animationEffect = null;
+        RestoreAnimationSpeeds();
+    }
+
     public void StartSlowTime(float timeScale)
-    { 
-      
-       Time.timeScale=timeScale;
+    {
+        if (!ownsTimeScale) originalTimeScale = Time.timeScale;
+        ownsTimeScale = true;
+        Time.timeScale = Mathf.Clamp(timeScale, 0f, 1f);
     }
+
     public void EndSlowTime()
     {
-        Time.timeScale = 1;
+        if (!ownsTimeScale) return;
+        Time.timeScale = originalTimeScale;
+        ownsTimeScale = false;
     }
-    IEnumerator SlowMotionOnAnimation(float time,float speedMult)
+
+    private void OnDisable()
     {
-        float currentSpeed = speedMult;
-        currentCharacterAnimator.speed = currentSpeed;
-        currentEnemyAnimator.speed = currentSpeed;
-        yield return new WaitForSeconds(time);
-        float minValue = 0.001f;
-        while (Mathf.Abs(currentSpeed-1)>minValue)
-        {
-            currentSpeed = Mathf.Lerp(currentSpeed,1,Time.deltaTime* slowMotionResetSpeed);
-            currentCharacterAnimator.speed = currentSpeed;
-            currentEnemyAnimator.speed = currentSpeed;
-
-            yield return null;
-
-        }
-        currentSpeed = 1;
-        currentCharacterAnimator.speed = currentSpeed;
-        currentEnemyAnimator.speed = currentSpeed;
-
+        EndAnimationEffect();
+        EndSlowTime();
     }
-    IEnumerator PauseFrameOnAnimation(float time)
-    {
-        Debug.LogWarning("进入顿帧协程"+ time);
-        currentCharacterAnimator.speed = 0f;
-        currentEnemyAnimator.speed = 0f;
-        yield return new WaitForSeconds(time);
-        currentCharacterAnimator.speed = 1f;
-        currentEnemyAnimator.speed = 1f;
-    }
-    
 
-    private Animator GetEnemyAnimator()
-    {
-        Enemy enemy =  FindAnyObjectByType<Enemy>();
-        return enemy.GetAnimator();
-    }
-    private Animator GetCurrentCharacterAnimator()
-    {
-        Player player =  FindAnyObjectByType<Player>();
-        return player.GetAnimator();
-
-    }
-    
-    #region 震屏
     public void CameraShake(float shakeForce)
     {
-        if (shakeForce == 0) { return; }
-        cinemachineImpulseSource.GenerateImpulseWithForce(shakeForce);
+        if (shakeForce > 0f && cinemachineImpulseSource != null)
+            cinemachineImpulseSource.GenerateImpulseWithForce(shakeForce);
     }
-
-
-    #endregion
-    
 }

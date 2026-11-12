@@ -2,29 +2,18 @@ using UnityEngine;
 
 public class EnemyIdleState : EnemyState
 {
-    private GameTimer patrolTimer;
-
-    public EnemyIdleState(EnemyStateMachine machine) : base(machine)
-    {
-    }
-
+    private float remaining;
+    public EnemyIdleState(EnemyStateMachine machine) : base(machine) { }
     public override void Enter()
     {
         var data = enemy.Data;
+        remaining = Mathf.Max(0f, data.patrolWaitTime);
         enemy.CrossFadeState(data.idleStateName, data.idleCrossFade);
         enemy.SetOffset(false);
         enemy.SetLock(data.lockValueIdle);
         enemy.SetMovement(0f);
-
-        if (TimerManager.MainInstance != null)
-        {
-            patrolTimer = TimerManager.MainInstance.GetTimer(data.patrolWaitTime, () =>
-            {
-                stateMachine.ChangeState(stateMachine.patrolState);
-            });
-        }
+        enemy.ResetMovementProgress();
     }
-
     public override void Update()
     {
         if (enemy.HasTargetInSight)
@@ -32,16 +21,7 @@ public class EnemyIdleState : EnemyState
             stateMachine.ChangeState(stateMachine.alertState);
             return;
         }
-    }
-
-    public override void Exit()
-    {
-        base.Exit();
-        if (TimerManager.MainInstance != null)
-        {
-            TimerManager.MainInstance.UnregisterTimer(patrolTimer);
-        }
-
-        patrolTimer = null;
+        remaining -= Time.deltaTime;
+        if (remaining <= 0f) stateMachine.ChangeState(stateMachine.patrolState);
     }
 }

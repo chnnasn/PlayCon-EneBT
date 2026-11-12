@@ -18,7 +18,7 @@ namespace FSM
 
             characterCombo.CheckMoveInterrupt();
         }
-        #region ¹¥»÷ÊÂ¼ş
+        #region æ”»å‡»äº‹ä»¶
         public void CancelAttackColdTime()
         {
            characterCombo.CanATK();
@@ -36,7 +36,7 @@ namespace FSM
             characterCombo.DisConnectCombo();
         }
         /// <summary>
-        /// ATKÕâÊÇ¹¥»÷´¥·¢µÄºËĞÄÊÂ¼ş£¬°üÀ¨ÁËÉËº¦¡¢ÊÜ»÷¶¯»­¡¢¸ñµ²¹¥»÷¡¢¹¥»÷Õß¡¢´ò»÷¸Ğ£¨ÕğÆÁ¡¢¶ÙÖ¡£©¡¢ÊÜ»÷ÒôĞ§¡¢ÊÜ»÷ÌØĞ§
+        /// ATKè¿™æ˜¯æ”»å‡»è§¦å‘çš„æ ¸å¿ƒäº‹ä»¶ï¼ŒåŒ…æ‹¬äº†ä¼¤å®³ã€å—å‡»åŠ¨ç”»ã€æ ¼æŒ¡æ”»å‡»ã€æ”»å‡»è€…ã€æ‰“å‡»æ„Ÿï¼ˆéœ‡å±ã€é¡¿å¸§ï¼‰ã€å—å‡»éŸ³æ•ˆã€å—å‡»ç‰¹æ•ˆ
         /// </summary>
         public void ATK()
         { 
@@ -44,11 +44,11 @@ namespace FSM
         }
         #endregion
         /// <summary>
-        /// ¶¯»­ÊÂ¼şÍË³ö:µÈ¹¥»÷¶¯»­²¥·ÅÍêÍË³ö
+        /// åŠ¨ç”»äº‹ä»¶é€€å‡º:ç­‰æ”»å‡»åŠ¨ç”»æ’­æ”¾å®Œé€€å‡º
         /// </summary>
         public override void OnAnimationExitEvent()
         {
-            TimerManager.MainInstance.GetOneTimer(0.2f, ToNullState);
+            ScheduleTimer(0.2f, ToNullState);
         }
 
         private void ToNullState()
@@ -59,7 +59,7 @@ namespace FSM
                 return;
             }
         }
-        //ÉÁ±ÜÍË³ö
+        //é—ªé¿é€€å‡º
         public override void OnAnimationTranslateEvent(IState state)
         {
             comboStateMachine.ChangeState(state);

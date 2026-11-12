@@ -33,20 +33,22 @@ namespace FSM
         protected override void AddInputActionCallBacks()
         {
             base.AddInputActionCallBacks();
-            PlayerInputSystem.MainInstance.inputActions.Player.Movement.canceled += OnEnterIdle;
-            PlayerInputSystem.MainInstance.inputActions.Player.Movement.started += OnKeepRunning;
+            inputActions.Player.Movement.canceled += OnEnterIdle;
+            inputActions.Player.Movement.started += OnKeepRunning;
         }
 
         protected override void RemoveInputActionCallBacks()
         {
             base.RemoveInputActionCallBacks();
-            PlayerInputSystem.MainInstance.inputActions.Player.Movement.canceled -= OnEnterIdle;
-            PlayerInputSystem.MainInstance.inputActions.Player.Movement.started -= OnKeepRunning;
+            inputActions.Player.Movement.canceled -= OnEnterIdle;
+            inputActions.Player.Movement.started -= OnKeepRunning;
         }
 
         private void OnEnterIdle(InputAction.CallbackContext context)
         {
-            gameTimer = TimerManager.MainInstance.GetTimer(playerMovementData.bufferToIdleTime, StartToIdle);
+            if (!IsCurrentState) return;
+            CancelTimer(gameTimer);
+            gameTimer = ScheduleTimer(playerMovementData.bufferToIdleTime, StartToIdle);
         }
 
         private void StartToIdle()
@@ -55,7 +57,8 @@ namespace FSM
         }
         private void OnKeepRunning(InputAction.CallbackContext context)
         {
-            TimerManager.MainInstance.UnregisterTimer(gameTimer);
+            if (!IsCurrentState) return;
+            CancelTimer(gameTimer);
             animator.CrossFadeInFixedTime("WalkStart", 0.14f);
         }
 
@@ -66,6 +69,7 @@ namespace FSM
 
         protected override void OnWalkStart(InputAction.CallbackContext context)
         {
+            if (!IsCurrentState) return;
             base.OnWalkStart(context);
 
             movementStateMachine.ChangeState(movementStateMachine.walkingState);

@@ -9,10 +9,10 @@ public class EnemyRetreatState : EnemyState
     {
     }
 
-    public void BeginRetreat(Transform player)
+    public void BeginRetreat(Transform player, float durationOverride = -1f)
     {
         retreatPlayer = player;
-        var duration = enemy.Data != null ? enemy.Data.retreatDuration : 0.35f;
+        var duration = durationOverride >= 0f ? durationOverride : enemy.Data != null ? enemy.Data.retreatDuration : 0.35f;
         retreatEndTime = Time.time + Mathf.Max(0f, duration);
         enemy.SetMovement(0f);
         stateMachine.ChangeState(this);
@@ -20,7 +20,10 @@ public class EnemyRetreatState : EnemyState
 
     public override void Enter()
     {
+        enemy.CancelAttack();
+        enemy.ResetMovementProgress();
         var data = enemy.Data;
+        enemy.CrossFadeState(data.retreatStateName, data.moveStartCrossFade);
         enemy.SetOffset(true);
         enemy.SetLock(data != null ? data.chaseLockValue : 1f);
         enemy.SetMovement(data != null ? data.retreatMovementValue : 1f);
@@ -44,7 +47,7 @@ public class EnemyRetreatState : EnemyState
             }
         }
 
-        if (Time.time >= retreatEndTime)
+        if (Time.time >= retreatEndTime || enemy.MovementIsBlocked)
         {
             FinishRetreat();
             return;
@@ -66,18 +69,15 @@ public class EnemyRetreatState : EnemyState
 
     public override void Exit()
     {
-        base.Exit();    
+        retreatPlayer = null;
+        retreatEndTime = 0f;
     }
 
     private void FinishRetreat()
     {
         retreatPlayer = null;
 
-        if (enemy.HasChaseLock)
-        {
-            stateMachine.ChangeState(stateMachine.chaseState);
-            return;
-        }
+        stateMachine.ResumeCombatOrReturn();
     }
 }
 

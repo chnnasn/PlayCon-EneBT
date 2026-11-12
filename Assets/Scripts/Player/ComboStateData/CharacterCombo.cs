@@ -6,10 +6,8 @@ namespace PlayerState
     public class CharacterCombo : CharacterComboBase
     {
         private const float AttackWindowGizmoDuration = 0.15f;
-        private const float EnemyLockWindowDuration = 0.35f;
         private const int MaxOverlapHits = 12;
         private float attackWindowGizmoExpireTime = -1f;
-        private float enemyLockExpireTime = -1f;
         private readonly Collider[] overlapHits = new Collider[MaxOverlapHits];
 
         public CharacterCombo(Animator animator, Transform playerTransform,Transform cameraTransform, PlayerComboReusableData reusableData, PlayerComboSOData playerComboSOData, Player player) : base(animator, playerTransform, cameraTransform, reusableData, playerComboSOData , player )
@@ -17,7 +15,7 @@ namespace PlayerState
            
         }
 
-        #region ÉÁA´¦Àí
+        #region é—ªAå¤„ç†
        
 
         public  void DodgeComboInput()
@@ -28,9 +26,9 @@ namespace PlayerState
         #endregion
         
 
-        #region ¼¼ÄÜ´¦Àí
+        #region æŠ€èƒ½å¤„ç†
         
-        /// Ö÷¶¯¼¼ÄÜ
+        /// ä¸»åŠ¨æŠ€èƒ½
         public bool CanFinishSkillInput()
         {
             if (animator.AnimationAtTag("Skill")) { return false; }
@@ -54,7 +52,7 @@ namespace PlayerState
 
         }
         
-        /// ÖÕ¼«´óÕĞ
+        /// ç»ˆæå¤§æ‹›
         public void FinishSkillInput()
         {
             if (comboData.finishSkillCombo == null) { return; }
@@ -64,7 +62,7 @@ namespace PlayerState
             }
             ExecuteSkill();
         }
-        /// ´óÕĞ
+        /// å¤§æ‹›
         public void SkillInput()
         {
             if (comboData.skillCombo == null) { return; }
@@ -75,43 +73,38 @@ namespace PlayerState
             ExecuteSkill();
         }
         
-        /// Ö´ĞĞ´óÕĞ
+        /// æ‰§è¡Œå¤§æ‹›
         private void ExecuteSkill()
         {
             ReSetATKIndex(0);
-            //²¥·ÅÓïÒô
+            //æ’­æ”¾è¯­éŸ³
             PlayCharacterVoice(reusableData.currentSkill);
-            //²¥·ÅÎäÆ÷ÒôĞ§
+            //æ’­æ”¾æ­¦å™¨éŸ³æ•ˆ
             PlayWeaponSound(reusableData.currentSkill);
             animator.CrossFadeInFixedTime(reusableData.currentSkill.comboName, 0.1f);
         }
         
         #endregion
 
-        #region µĞÈË¼ì²â
+        #region æ•Œäººæ£€æµ‹
         public void UpdateDetectionDir()
         {
             reusableData.detectionDir = playerTransform.forward;
         }
         public void UpdateEnemy()
         {
-            if (!player.IsManualEnemyLockActive && player.CurrentEnemy != null && Time.time > enemyLockExpireTime)
-            {
-                player.SetCurrentEnemy(null);
-            }
-
             if (player.IsManualEnemyLockActive)
             {
                 return;
             }
 
-            // ½öÔÚ¹¥»÷Ïà¹Ø¶¯»­ÆÚ¼ä¼ì²âÄ¿±ê£¬±ÜÃâ·ÇÕ½¶·Ê±³ÖĞøÉ¨Ãè¡£
+            // ä»…åœ¨æ”»å‡»ç›¸å…³åŠ¨ç”»æœŸé—´æ£€æµ‹ç›®æ ‡ï¼Œé¿å…éæˆ˜æ–—æ—¶æŒç»­æ‰«æã€‚
             if (!animator.AnimationAtTag("ATK") && !animator.AnimationAtTag("Skill"))
             {
                 return;
             }
 
-            // ¹¥»÷´°¿ÚÄÚ³ÖĞø³¢ÊÔËøµĞ£¬ÃüÖĞ»áË¢ĞÂ³ÖÓĞÊ±¼ä´°¿Ú¡£
+            // æ”»å‡»çª—å£å†…æŒç»­å°è¯•é”æ•Œï¼Œå‘½ä¸­ä¼šåˆ·æ–°æŒæœ‰æ—¶é—´çª—å£ã€‚
             DetectEnemyInAttackWindow();
         }
         
@@ -149,6 +142,7 @@ namespace PlayerState
 
         private void DetectEnemyInAttackWindow()
         {
+            if (player.IsManualEnemyLockActive) return;
             UpdateDetectionDir();
             reusableData.detectionOrigin = new Vector3(playerTransform.position.x, playerTransform.position.y + 0.7f, playerTransform.position.z);
 
@@ -160,8 +154,12 @@ namespace PlayerState
 
             if (Physics.SphereCast(reusableData.detectionOrigin, enemyDetectionData.detectionRadius, reusableData.detectionDir, out var hit, enemyDetectionData.detectionLength, enemyDetectionData.WhatIsEnemy))
             {
-                RefreshLockedEnemy(hit.collider.GetComponentInParent<Enemy>());
-                return;
+                var candidate = hit.collider.GetComponentInParent<Enemy>();
+                if (Player.IsValidEnemy(candidate) && player.HasClearPathToEnemy(candidate))
+                {
+                    RefreshLockedEnemy(candidate);
+                    return;
+                }
             }
 
             var sphereCenter = reusableData.detectionOrigin + reusableData.detectionDir * enemyDetectionData.detectionLength;
@@ -183,7 +181,7 @@ namespace PlayerState
                 }
 
                 var enemyTarget = collider.GetComponentInParent<Enemy>();
-                if (enemyTarget == null)
+                if (!Player.IsValidEnemy(enemyTarget) || !player.HasClearPathToEnemy(enemyTarget))
                 {
                     continue;
                 }
@@ -217,8 +215,7 @@ namespace PlayerState
                 return;
             }
 
-            player.SetCurrentEnemy(enemyTarget);
-            enemyLockExpireTime = Time.time + EnemyLockWindowDuration;
+            player.SetCurrentEnemy(enemyTarget, manualLock: false);
         }
 
         #endregion

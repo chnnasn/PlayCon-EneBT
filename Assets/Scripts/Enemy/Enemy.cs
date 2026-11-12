@@ -1,4 +1,5 @@
 using FSM;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class Enemy : EnemyControllerBase
@@ -13,18 +14,39 @@ public class Enemy : EnemyControllerBase
     [SerializeField] private string currentStateName;
     [SerializeField] private float damageTakenMultiplier = 1f;
 
-    private EnemyHeath health;
+    private CharacterHealthBase health;
+    private readonly List<AnimatorClipInfo> attackClipInfo = new List<AnimatorClipInfo>(4);
+    private EnemyAttackController attacks;
+    private float lostSightTime;
+    private bool engaged;
+    private bool activeUseBehaviorTree;
+    private GameEventsManager subscribedEvents;
+    private CombatPositionRing combatPositions;
+    private Vector3 lastKnownTargetPosition;
+    private float nextPositionRequest;
+    private bool hasCombatPosition;
+    private Vector3 combatPosition;
+    public bool CanOccupyAttackPosition => !HasNavigation || combatPositions == null || !combatPositions.isActiveAndEnabled ||
+        (TryCombatPosition(out var point) && Vector3.Distance(transform.position, point) <= 0.5f);
+    public Vector3 PursuitPosition => HasNavigation && lostSightTime > 0f ? lastKnownTargetPosition : ChaseTarget.position;
 
     public EnemyStateMachine stateMachine { get; private set; }
     public EnemyBehaviorTree behaviorTree { get; private set; }
     public Vector3 PatrolAreaCenter { get; private set; }
     public Transform ChaseTarget { get; private set; }
-    public bool HasChaseLock => ChaseTarget != null;
+    public bool HasChaseLock => IsValidTarget(ChaseTarget);
+    public bool IsAttacking => attacks != null && attacks.IsActive;
+    public int AttackVersion => attacks != null ? attacks.Version : 0;
+    public bool IsReturningToLair { get; private set; }
     public float DamageTakenMultiplier => damageTakenMultiplier;
     public bool IsInBreakState => useBehaviorTree
         ? behaviorTree != null && behaviorTree.IsBreakActive
         : stateMachine != null && stateMachine.currentState.Value == stateMachine.breakState;
+    public bool IsHitReactionDeferred => useBehaviorTree
+        ? behaviorTree != null && behaviorTree.IsHitReactionDeferred
+        : stateMachine != null && stateMachine.IsHitReactionDeferred;
     public bool IsDead => health != null && health.IsDead;
+    protected override bool CanMove => base.CanMove && !IsDead;
     /// <summary>当前是否正在播放攻击动画（撕咬/爪击/咆哮），用于防止攻击动画中途被切换。</summary>
     public bool IsAttackAnimationPlaying
     {
@@ -43,10 +65,10 @@ public class Enemy : EnemyControllerBase
             }
 
             // 兼容子状态机：状态名可能带路径前缀，优先用片段名判断（片段名 = 状态名）。
-            var clipInfos = characterAnimator.GetCurrentAnimatorClipInfo(0);
-            if (clipInfos.Length > 0)
+            characterAnimator.GetCurrentAnimatorClipInfo(0, attackClipInfo);
+            if (attackClipInfo.Count > 0)
             {
-                var clipName = clipInfos[0].clip.name;
+                var clipName = attackClipInfo[0].clip.name;
                 if (clipName == data.biteStateName || clipName == data.clawStateName || clipName == data.roarStateName)
                 {
                     return true;
@@ -60,28 +82,59 @@ public class Enemy : EnemyControllerBase
     protected override void Awake()
     {
         base.Awake();
-        health = GetComponent<EnemyHeath>();
+        health = GetComponent<CharacterHealthBase>();
         PatrolAreaCenter = transform.position;
-        // FSM 状态机保留创建，但默认不再启用。
+        attacks = new EnemyAttackController(this);
         stateMachine = new EnemyStateMachine(this);
-        if (useBehaviorTree)
-        {
-            behaviorTree = new EnemyBehaviorTree(this);
-        }
+        behaviorTree = new EnemyBehaviorTree(this);
+        activeUseBehaviorTree = useBehaviorTree;
     }
 
     protected override void Start()
     {
         base.Start();
-        if (!useBehaviorTree)
-        {
-            stateMachine.ChangeState(stateMachine.idleState);
-        }
     }
 
     protected override void Update()
     {
         base.Update();
+
+        if (Data == null) return;
+        if (activeUseBehaviorTree != useBehaviorTree)
+        {
+            ResetAIForRevive();
+        }
+
+        if (IsDead)
+        {
+            CancelAttack();
+            EndChaseLock();
+            if (!useBehaviorTree && stateMachine.currentState.Value != stateMachine.deadState)
+                stateMachine.ChangeState(stateMachine.deadState);
+        }
+        else if (engaged)
+        {
+            if (!HasChaseLock)
+            {
+                RequestReturnToLair();
+            }
+            else
+            {
+                if (HasLineOfSight(ChaseTarget))
+                {
+                    lostSightTime = 0f;
+                    lastKnownTargetPosition = ChaseTarget.position;
+                }
+                else lostSightTime += Time.deltaTime;
+                var delta = ChaseTarget.position - transform.position;
+                var fromHome = transform.position - PatrolAreaCenter;
+                delta.y = fromHome.y = 0f;
+                if ((Data.chaseGiveUpDistance > 0f && delta.sqrMagnitude > Data.chaseGiveUpDistance * Data.chaseGiveUpDistance) ||
+                    (Data.homeLeashDistance > 0f && fromHome.sqrMagnitude > Data.homeLeashDistance * Data.homeLeashDistance) ||
+                    lostSightTime > Mathf.Max(0.1f, HasNavigation ? Data.navigationSearchTimeout : Data.lostSightTimeout))
+                    RequestReturnToLair();
+            }
+        }
 
         if (useBehaviorTree)
         {
@@ -91,14 +144,16 @@ public class Enemy : EnemyControllerBase
                 currentStateName = behaviorTree.CurrentBehavior;
             }
 
-            return;
         }
-
-        stateMachine.Update();
+        else stateMachine.Update();
+        attacks.Tick();
     }
 
     public void OnPlayerOneStrokeCommand()
     {
+        if (IsDead || !isActiveAndEnabled) return;
+        CancelAttack();
+        Navigation?.Cancel();
         var duration = Data != null ? Data.retreatDuration : 0.35f;
         if (duration <= 0f)
         {
@@ -117,7 +172,7 @@ public class Enemy : EnemyControllerBase
             return;
         }
 
-        stateMachine.retreatState.BeginRetreat(player);
+        stateMachine.RequestRetreat(player);
     }
 
     public Vector3 GetRandomPatrolPoint()
@@ -172,13 +227,130 @@ public class Enemy : EnemyControllerBase
 
     public void BeginChaseLock(Transform chaseTarget)
     {
+        if (IsDead || !IsValidTarget(chaseTarget) || IsReturningToLair) return;
+        var targetHealth = chaseTarget.GetComponentInParent<CharacterHealthBase>();
+        chaseTarget = targetHealth.transform;
+        if (ChaseTarget != chaseTarget)
+        {
+            combatPositions?.Release(Navigation);
+            combatPositions = chaseTarget.GetComponent<CombatPositionRing>();
+            hasCombatPosition = false;
+            nextPositionRequest = 0f;
+            lostSightTime = 0f;
+            lastKnownTargetPosition = chaseTarget.position;
+        }
         target = chaseTarget;
         ChaseTarget = chaseTarget;
+        engaged = true;
     }
 
     public void EndChaseLock()
     {
+        combatPositions?.Release(Navigation);
+        combatPositions = null;
+        hasCombatPosition = false;
         ChaseTarget = null;
+        engaged = false;
+        lostSightTime = 0f;
+    }
+
+    private bool TryCombatPosition(out Vector3 position)
+    {
+        position = combatPosition;
+        if (combatPositions == null || !HasNavigation || !combatPositions.isActiveAndEnabled) return false;
+        if (Time.time >= nextPositionRequest)
+        {
+            nextPositionRequest = Time.time + 0.25f;
+            var radius = Mathf.Min(Data.biteRange, Data.clawRange) * 0.85f;
+            hasCombatPosition = combatPositions.TryReserve(Navigation, radius, out combatPosition);
+        }
+        position = combatPosition;
+        return hasCombatPosition;
+    }
+
+    public void MoveInPursuit(float speed)
+    {
+        if (!HasChaseLock) return;
+        var point = PursuitPosition;
+        if (HasNavigation)
+        {
+            var stopDistance = 0.2f;
+            if (lostSightTime == 0f && combatPositions != null && combatPositions.isActiveAndEnabled)
+            {
+                if (TryCombatPosition(out var reserved)) point = reserved;
+                else point = combatPositions.WaitingPosition(Navigation, Mathf.Min(Data.biteRange, Data.clawRange));
+            }
+            else if (lostSightTime == 0f) stopDistance = Mathf.Min(Data.biteRange, Data.clawRange) * 0.85f;
+            Navigation.MoveTo(point, speed, stopDistance);
+            if (Vector3.Distance(transform.position, point) <= stopDistance + 0.1f)
+                RotateTowards(ChaseTarget.position - transform.position, Data.combatRotationTime);
+            return;
+        }
+        var direction = point - transform.position;
+        direction.y = 0f;
+        RotateTowards(direction, Data.combatRotationTime);
+        if (direction.magnitude > Mathf.Max(0.2f, Mathf.Min(Data.biteRange, Data.clawRange) * 0.9f))
+            MoveInDirection(direction, speed);
+        else ResetMovementProgress();
+    }
+
+    private void OnNavigationMoved(Vector3 velocity)
+    {
+        if (isActiveAndEnabled && !IsDead && Data != null)
+            SetMovement(velocity.magnitude > 0.05f ? Data.chaseMovementValue : 0f);
+    }
+
+    public bool CanStartAttack(EnemyAttackKind kind) => attacks != null && attacks.CanStart(kind);
+    public bool TryStartAttack(EnemyAttackKind kind) => attacks != null && attacks.TryStart(kind);
+    public void CancelAttack() => attacks?.Cancel();
+    public void CancelAttack(int version)
+    {
+        if (attacks != null && attacks.Version == version) attacks.Cancel();
+    }
+
+    public void RequestReturnToLair()
+    {
+        if (IsDead || IsReturningToLair) return;
+        CancelAttack();
+        Navigation?.Cancel();
+        EndChaseLock();
+        IsReturningToLair = true;
+        SuppressThreats(float.PositiveInfinity);
+        ResetMovementProgress();
+        if (useBehaviorTree) behaviorTree.RequestReturnToLair();
+        else if (!stateMachine.IsInPriorityReaction) stateMachine.ChangeState(stateMachine.returnState);
+    }
+
+    public void FinishReturnToLair()
+    {
+        IsReturningToLair = false;
+        EndChaseLock();
+        SuppressThreats(Data != null ? Data.reacquireDelay : 3f);
+        ResetMovementProgress();
+        SetOffset(false);
+        SetMovement(0f);
+    }
+
+    public void ResetAIForRevive()
+    {
+        if (stateMachine == null || behaviorTree == null) return;
+        stateMachine.Stop();
+        stateMachine.HasRoared = false;
+        stateMachine.ClearPendingReactions();
+        behaviorTree.Reset();
+        attacks.Reset();
+        Navigation?.Cancel();
+        EndChaseLock();
+        IsReturningToLair = false;
+        SuppressThreats(0f);
+        ResetMovementProgress();
+        SetDamageTakenMultiplier(1f);
+        SetBreak(false);
+        SetOffset(false);
+        SetMovement(0f);
+        activeUseBehaviorTree = useBehaviorTree;
+        if (!useBehaviorTree && isActiveAndEnabled && Data != null)
+            stateMachine.Start(IsDead ? (IState)stateMachine.deadState : stateMachine.spawnState);
     }
 
     public void SetDamageTakenMultiplier(float value)
@@ -195,17 +367,24 @@ public class Enemy : EnemyControllerBase
     /// <summary>受击通知（由 EnemyHeath 转发），行为树进入 Hit 状态。</summary>
     public void NotifyHit(Transform attacker)
     {
+        if (IsDead || !isActiveAndEnabled || IsInBreakState) return;
+        CancelAttack();
+        Navigation?.Cancel();
+        BeginChaseLock(attacker);
         if (useBehaviorTree)
         {
             behaviorTree?.RequestHit(attacker);
             return;
         }
 
-        // FSM 回退路径：保持原逻辑，受击动画退出事件会触发追击。
+        stateMachine.RequestHit();
     }
 
     public void EnterBreakState()
     {
+        if (IsDead || !isActiveAndEnabled) return;
+        CancelAttack();
+        Navigation?.Cancel();
         if (useBehaviorTree)
         {
             behaviorTree?.RequestBreak();
@@ -217,33 +396,57 @@ public class Enemy : EnemyControllerBase
             return;
         }
 
-        stateMachine.ChangeState(stateMachine.breakState);
+        stateMachine.RequestBreak();
     }
 
     private void OnEnable()
     {
-        if (!useBehaviorTree && stateMachine != null)
+        if (health != null) health.Died += OnHealthDied;
+        if (Navigation != null) Navigation.Moved += OnNavigationMoved;
+        if (stateMachine != null)
         {
             stateMachine.currentState.OnValueChanged += HandleStateChanged;
         }
+        ResetAIForRevive();
 
-        if (GameEventsManager.MainInstance != null)
+        subscribedEvents = GameEventsManager.MainInstance;
+        if (subscribedEvents != null)
         {
-            GameEventsManager.MainInstance.AddEventListening<Transform>(PlayerOneStrokeCommandEvent, OnPlayerOneStrokeCommandEvent);
+            subscribedEvents.AddEventListening<Transform>(PlayerOneStrokeCommandEvent, OnPlayerOneStrokeCommandEvent);
         }
     }
     
     private void OnDisable()
     {
-        if (!useBehaviorTree && stateMachine != null)
+        if (health != null) health.Died -= OnHealthDied;
+        if (Navigation != null)
+        {
+            Navigation.Moved -= OnNavigationMoved;
+            Navigation.Cancel();
+        }
+        if (stateMachine != null)
         {
             stateMachine.currentState.OnValueChanged -= HandleStateChanged;
         }
+        CancelAttack();
+        behaviorTree?.Reset();
+        stateMachine?.Stop();
+        stateMachine?.ClearPendingReactions();
+        EndChaseLock();
 
-        if (GameEventsManager.MainInstance != null)
+        if (subscribedEvents != null)
         {
-            GameEventsManager.MainInstance.ReMoveEvent<Transform>(PlayerOneStrokeCommandEvent, OnPlayerOneStrokeCommandEvent);
+            subscribedEvents.ReMoveEvent<Transform>(PlayerOneStrokeCommandEvent, OnPlayerOneStrokeCommandEvent);
         }
+        subscribedEvents = null;
+    }
+
+    private void OnHealthDied()
+    {
+        // Damage can arrive after Update has already submitted movement for this frame.
+        Navigation?.Cancel();
+        CancelAttack();
+        EndChaseLock();
     }
 
     private void OnPlayerOneStrokeCommandEvent(Transform enemyTransform)
@@ -274,6 +477,7 @@ public class Enemy : EnemyControllerBase
     
     public void OnAnimationExitEvent(AnimationState playerState)
     {
+        if (!isActiveAndEnabled || IsDead) return;
         if (useBehaviorTree)
         {
             behaviorTree?.OnAnimationExitEvent(playerState);
@@ -283,21 +487,12 @@ public class Enemy : EnemyControllerBase
         switch (playerState)
         {
             case AnimationState.Idle:
-                stateMachine.ChangeState(stateMachine.idleState);
+                if (stateMachine.currentState.Value == stateMachine.patrolState)
+                    stateMachine.patrolState.OnAnimationExitEvent();
                 break;
             case AnimationState.Hit:
-                if (stateMachine.currentState.Value != stateMachine.breakState)
-                {
-                    var player = FindObjectOfType<Player>();
-                    if (player == null)
-                    {
-                        break;
-                    }
-
-                    target = player.transform;
-                    BeginChaseLock();
-                    stateMachine.ChangeState(stateMachine.chaseState);
-                }
+                if (stateMachine.currentState.Value == stateMachine.hitState)
+                    stateMachine.hitState.OnAnimationExitEvent();
                 break;
         }
     }

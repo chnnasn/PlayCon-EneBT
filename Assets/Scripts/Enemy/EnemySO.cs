@@ -84,6 +84,15 @@ public class EnemySO : ScriptableObject
     [Min(0f)] public float clawDuration = 0.8f;
     [Min(0f)] public float roarDuration = 1f;
 
+    [Header("Attack Gameplay")]
+    [Min(0f)] public float biteDamage = 12f;
+    [Min(0f)] public float clawDamage = 8f;
+    [Min(0f)] public float biteWindup = 0.4f;
+    [Min(0f)] public float clawWindup = 0.3f;
+    [Range(1f, 180f)] public float attackAngle = 100f;
+    [Min(0f)] public float attackHeightTolerance = 1.5f;
+    public string playerHitStateName = "Hit";
+
     [Header("Investigate")]
     [Min(0f)] public float investigateSpeed = 2.5f;
     [Min(0f)] public float investigateDuration = 2f;
@@ -96,6 +105,13 @@ public class EnemySO : ScriptableObject
 
     [Header("Chase Give Up (leash)")]
     [Min(0f)] public float chaseGiveUpDistance = 18f;
+    [Min(0f)] public float homeLeashDistance = 20f;
+    [Min(0f)] public float lostSightTimeout = 2f;
+    [Tooltip("导航追击时先走向最后目击点，再搜索；不会隔墙持续读取玩家位置。")]
+    [Min(0.1f)] public float navigationSearchTimeout = 10f;
+    [Min(0.1f)] public float movementBlockedTimeout = 1.5f;
+    [Min(0f)] public float reacquireDelay = 3f;
+    [Min(1f)] public float returnTimeout = 12f;
 
     [Header("Lair (ReturnToLair)")]
     [Min(0f)] public float lairReturnSpeed = 3f;

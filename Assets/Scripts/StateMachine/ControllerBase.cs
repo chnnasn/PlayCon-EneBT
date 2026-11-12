@@ -26,7 +26,8 @@ public class ControllerBase : MonoBehaviour
     [SerializeField, Header("坡面检测")] private float SlopDetectionLenth=1;
     private ColliderHit groundHit;
 
-    [Range(0.2f, 100), SerializeField, Header("移动位移倍率")] private float moveMult;
+    [Range(0.2f, 100), SerializeField, Header("移动位移倍率")] private float moveMult = 1f;
+    protected virtual bool CanMove => isActiveAndEnabled;
     protected virtual void Awake()
     {
         characterAnimator = GetComponent<Animator>();
@@ -38,6 +39,7 @@ public class ControllerBase : MonoBehaviour
     }
     protected virtual void Update()
     {
+        if (!CanMove || characterController == null || !characterController.enabled) return;
         GroundDetecion();
         UpdateChracterGravity();
         UpDateVerticalVelocity(); 
@@ -47,10 +49,10 @@ public class ControllerBase : MonoBehaviour
     /// </summary>
     protected virtual void OnAnimatorMove()
     {       
-        //开启角色的RootMotion
-        characterAnimator.ApplyBuiltinRootMotion();
-
+        if (!CanMove || characterController == null || !characterController.enabled) return;
+        // deltaPosition is already a displacement. Route every animation through collision handling.
         UpdateCharacterVelocity(characterAnimator.deltaPosition);
+        transform.rotation *= characterAnimator.deltaRotation;
     }
    
     /// <summary>
@@ -70,7 +72,7 @@ public class ControllerBase : MonoBehaviour
         {
             fallOutdeltaTimer = fallOutTimer;
            
-            if (verticalSpeed < 0)
+            if (verticalSpeed <= 0)
             {
                 verticalSpeed = -2;
             }
@@ -83,10 +85,8 @@ public class ControllerBase : MonoBehaviour
             }
             else
             {
-                if ( verticalSpeed < maxVerticalSpeed&&verticalSpeed>minVerticalSpeed)
-                {
-                    verticalSpeed += characterGravity * Time.deltaTime;
-                }
+                verticalSpeed = Mathf.Clamp(verticalSpeed + characterGravity * Time.deltaTime,
+                    minVerticalSpeed, maxVerticalSpeed);
             }
 
         }
@@ -98,7 +98,8 @@ public class ControllerBase : MonoBehaviour
     protected void UpDateVerticalVelocity()
     {
         verticalVelocity.Set(0, verticalSpeed, 0);
-        characterController.Move(verticalVelocity*Time.deltaTime);
+        var collisions = characterController.Move(verticalVelocity * Time.deltaTime);
+        if ((collisions & CollisionFlags.Above) != 0 && verticalSpeed > 0f) verticalSpeed = 0f;
     
     }
     /// <summary>
@@ -108,11 +109,12 @@ public class ControllerBase : MonoBehaviour
     protected Vector3 ResetVelocityOnSlop(Vector3 characterVelosity)
     {
       
-        if (Physics.Raycast(transform.position, Vector3.down, out var groundHit, SlopDetectionLenth,whatIsGround))
+        if (isOnGround && Physics.Raycast(transform.position, Vector3.down, out var groundHit,
+            SlopDetectionLenth, whatIsGround, QueryTriggerInteraction.Ignore))
         {
             float newAngle = Vector3.Dot(Vector3.up, groundHit.normal);
             //不在天花板和角色在坡面上时
-            if (newAngle != -1 && verticalSpeed <= 0)
+            if (newAngle > 0f && Vector3.Angle(Vector3.up, groundHit.normal) <= characterController.slopeLimit && verticalSpeed <= 0)
             {
                 return Vector3.ProjectOnPlane(characterVelosity,groundHit.normal);
             }
@@ -127,12 +129,7 @@ public class ControllerBase : MonoBehaviour
     protected virtual void UpdateCharacterVelocity(Vector3 movement)
     {
         Vector3 dir = ResetVelocityOnSlop(movement);
-        
-
-        if (characterAnimator.AnimationAtTag("Movement"))
-        {
-            characterController.Move(dir * Time.deltaTime * moveMult);
-        }
+        characterController.Move(dir * Mathf.Max(0f, moveMult));
     }
 
     public Animator GetAnimator()

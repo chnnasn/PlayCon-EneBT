@@ -1,61 +1,83 @@
-﻿using System;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class StateBarUI : MonoBehaviour,IUI
+public class StateBarUI : MonoBehaviour, IUI
 {
     [SerializeField] private Image RedBloodBar;
     [SerializeField] private Image GreenBloodBar;
-    private Transform cam;
-    private float baseScale=8;
-    private float baseDistance = 3;
+    [SerializeField, Min(0.01f)] private float damageTrailSpeed = 0.5f;
+    private Camera viewCamera;
+    private Canvas parentCanvas;
+    private CanvasGroup visibility;
+    private RectTransform rectTransform;
+    private float displayedHealth = 1f;
+
     public void Init()
     {
-        //GetUIImage();
+        rectTransform = transform as RectTransform;
+        parentCanvas = GetComponentInParent<Canvas>();
+        visibility = GetComponent<CanvasGroup>();
+        if (visibility == null)
+            visibility = gameObject.AddComponent<CanvasGroup>();
+        visibility.interactable = false;
+        visibility.blocksRaycasts = false;
+        if (RedBloodBar != null)
+            RedBloodBar.raycastTarget = false;
+        if (GreenBloodBar != null)
+            GreenBloodBar.raycastTarget = false;
     }
+
     private void Awake()
     {
-        GetUIImage();
-        if (RedBloodBar == null || GreenBloodBar == null)
-        {
-            Debug.LogError("RedBloodBar or GreenBloodBar is not initialized.");
-        }
-        cam = Camera.main.transform;
+        Init();
     }
 
-    private void GetUIImage()
-    {
-        // RedBloodBar = transform.Find("HP Red").GetComponent<Image>();
-        // GreenBloodBar = transform.Find("HP Green").GetComponent<Image>();
-    }
     private void Update()
     {
-        //Debug.Log(GreenBloodBar.fillAmount);
-        //Debug.Log(RedBloodBar.fillAmount);
-        if (GreenBloodBar.fillAmount < RedBloodBar.fillAmount)
-        {
-            RedBloodBar.fillAmount -= Time.deltaTime*0.05f;
-        }
+        if (RedBloodBar != null)
+            RedBloodBar.fillAmount = Mathf.MoveTowards(RedBloodBar.fillAmount, displayedHealth, damageTrailSpeed * Time.unscaledDeltaTime);
     }
-    public void UpdateBlood(float percentage)
+
+    public void UpdateBlood(float percentage, bool immediate = false)
     {
-      
-        GreenBloodBar.fillAmount= percentage;
-       
+        displayedHealth = float.IsNaN(percentage) || float.IsInfinity(percentage) ? 0f : Mathf.Clamp01(percentage);
+        if (GreenBloodBar != null)
+            GreenBloodBar.fillAmount = displayedHealth;
+        if (RedBloodBar != null && (immediate || displayedHealth > RedBloodBar.fillAmount))
+            RedBloodBar.fillAmount = displayedHealth;
     }
+
+    public void SetVisible(bool visible)
+    {
+        if (visibility == null)
+            Init();
+        visibility.alpha = visible ? 1f : 0f;
+    }
+
     public void ShowAt(Vector3 worldPos)
     {
-
-        Vector3 viewPos = Camera.main.WorldToViewportPoint(worldPos);
-        if (viewPos.x > -0.2 && viewPos.x < 1.2 && viewPos.y > -0.2 && viewPos.y < 1.2 && viewPos.z > -0.2)
+        if (viewCamera == null || !viewCamera.isActiveAndEnabled)
+            viewCamera = Camera.main;
+        if (viewCamera == null || parentCanvas == null || rectTransform == null)
         {
-            Vector3 screenPos = Camera.main.WorldToScreenPoint(worldPos);
-            this.transform.position = screenPos;
-
-            float distance = Vector3.Distance(worldPos, cam.position);
-            float scale = baseScale * baseDistance / distance;
-            transform.localScale = new Vector3(scale, scale, scale);
+            SetVisible(false);
+            return;
         }
-        
+
+        var viewport = viewCamera.WorldToViewportPoint(worldPos);
+        if (viewport.z <= 0f || viewport.x < 0f || viewport.x > 1f || viewport.y < 0f || viewport.y > 1f)
+        {
+            SetVisible(false);
+            return;
+        }
+
+        var screenPoint = viewCamera.WorldToScreenPoint(worldPos);
+        var canvasCamera = parentCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : parentCanvas.worldCamera;
+        if (rectTransform.parent is RectTransform parent && RectTransformUtility.ScreenPointToLocalPointInRectangle(parent, screenPoint, canvasCamera, out var localPoint))
+            rectTransform.localPosition = new Vector3(localPoint.x, localPoint.y, 0f);
+
+        var distance = Mathf.Max(0.1f, Vector3.Distance(worldPos, viewCamera.transform.position));
+        transform.localScale = Vector3.one * Mathf.Clamp(24f / distance, 0.5f, 8f);
+        SetVisible(true);
     }
 }

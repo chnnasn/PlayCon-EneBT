@@ -16,8 +16,7 @@ namespace FSM
             base.Enter();
             reusableDate.rotationTime = playerMovementData.dashData.rotationTime;
 
-            reusableDate.canDash = false;
-            TimerManager.MainInstance.GetOneTimer(playerMovementData.dashData.coldTime, ResetDash);
+            reusableDate.dashCooldownEndTime = Time.time + playerMovementData.dashData.coldTime;
             //播放音效
             movementStateMachine.player.PlayDodgeSound();
         }

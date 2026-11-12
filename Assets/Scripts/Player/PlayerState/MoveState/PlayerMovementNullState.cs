@@ -38,7 +38,7 @@ namespace FSM
         //ATK动画或者技能动画播放完时出发
         public override void OnAnimationExitEvent()
         {
-            TimerManager.MainInstance.GetOneTimer(0.2f, CheckStateExit);
+            ScheduleTimer(0.2f, CheckStateExit);
         }
 
         private void CheckStateExit()

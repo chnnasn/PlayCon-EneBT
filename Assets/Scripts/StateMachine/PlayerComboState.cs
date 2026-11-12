@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using Tools;
 using PlayerState;
+using System.Collections.Generic;
 
 namespace FSM
 {
@@ -16,6 +17,10 @@ namespace FSM
         protected PlayerComboReusableData reusableData { get;  }
         protected PlayerComboData playerComboData { get; }
         protected Animator animator { get; }
+        private readonly List<GameTimer> ownedTimers = new List<GameTimer>();
+        private CharacterInput inputActions;
+        protected bool IsCurrentState => comboStateMachine.IsRunning &&
+            ReferenceEquals(comboStateMachine.currentState.Value, this) && player.CanAcceptInput;
         public PlayerComboState(PlayerComboStateMachine comboStateMachine)
         {
            this.comboStateMachine = comboStateMachine;
@@ -50,6 +55,22 @@ namespace FSM
         public virtual void Exit()
         {
             RemoveInputActionEvent();
+            if (TimerManager.TryGetExistingInstance(out var timerManager))
+            {
+                foreach (var timer in ownedTimers) timerManager.UnregisterTimer(timer);
+            }
+            ownedTimers.Clear();
+        }
+
+        protected void ScheduleTimer(float duration, Action action)
+        {
+            GameTimer timer = null;
+            timer = TimerManager.MainInstance.GetTimer(duration, () =>
+            {
+                ownedTimers.Remove(timer);
+                if (IsCurrentState) action();
+            });
+            ownedTimers.Add(timer);
         }
 
         public virtual void HandInput()
@@ -79,22 +100,26 @@ namespace FSM
         }
         protected virtual void AddInputActionEvent()
         {
-            PlayerInputSystem.MainInstance.inputActions.Player.L_AtK.started += OnAttackInput;
-            PlayerInputSystem.MainInstance.inputActions.Player.FinishSkill.started += OnFinishSkill;
-            PlayerInputSystem.MainInstance.inputActions.Player.Execute.started += OnSkill;
+            inputActions = PlayerInputSystem.MainInstance?.inputActions;
+            if (inputActions == null) return;
+            inputActions.Player.L_AtK.started += OnAttackInput;
+            inputActions.Player.FinishSkill.started += OnFinishSkill;
+            inputActions.Player.Execute.started += OnSkill;
             characterCombo.AddEventAction();
         }
 
 
         protected virtual void RemoveInputActionEvent()
         {
-            PlayerInputSystem.MainInstance.inputActions.Player.L_AtK.started -= OnAttackInput;
-            PlayerInputSystem.MainInstance.inputActions.Player.FinishSkill.started -= OnFinishSkill;
-            PlayerInputSystem.MainInstance.inputActions.Player.Execute.started -= OnSkill;
+            if (inputActions == null) return;
+            inputActions.Player.L_AtK.started -= OnAttackInput;
+            inputActions.Player.FinishSkill.started -= OnFinishSkill;
+            inputActions.Player.Execute.started -= OnSkill;
             characterCombo.RemoveEventActon();
         }
         private void OnAttackInput(InputAction.CallbackContext context)
         {
+            if (!IsCurrentState) return;
 
             if (characterCombo.CanBaseComboInput())
             {
@@ -113,6 +138,7 @@ namespace FSM
         }
         private void OnFinishSkill(InputAction.CallbackContext context)
         {
+            if (!IsCurrentState) return;
             if (characterCombo.CanFinishSkillInput())
             {
                 characterCombo.FinishSkillInput();
@@ -121,6 +147,7 @@ namespace FSM
         }
         private void OnSkill(InputAction.CallbackContext context)
         {
+            if (!IsCurrentState) return;
             if (characterCombo.CanSkillInput())
             {
                 characterCombo.SkillInput();

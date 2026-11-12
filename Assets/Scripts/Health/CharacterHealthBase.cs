@@ -1,180 +1,249 @@
-﻿using System;
-using Tools;
-using UnityEngine;
+using System;
 using PlayerState;
-using static UnityEngine.Rendering.DebugUI;
+using UnityEngine;
 
 public enum HealthState
 {
     TriggerDamage,
-    GenerateDamage,
+    GenerateDamage, // Legacy name only: damage without a recipient must not be broadcast to every character.
     BrokenDefense,
 }
 
+[DisallowMultipleComponent]
 public class CharacterHealthBase : MonoBehaviour
 {
     [SerializeField] private float currentHP;
-    protected Transform currentEnemy;
-    [SerializeField]protected CharacterHealthInfo characterHealthInfo;
+    [SerializeField, Min(1f)] private float fallbackMaxHP = 100f;
+    [SerializeField] protected CharacterHealthInfo characterHealthInfo;
     protected CharacterHealthInfo healthInfo;
+    protected Transform currentEnemy;
     protected Animator animator;
 
-    private Transform BarUI;
+    private bool wasDead;
+    private bool healthSubscribed;
+    private GameEventsManager eventManager;
+    private UIManager barOwner;
+    private StateBarUI healthBar;
+    private Transform barAnchor;
+    private float nextBarLookupTime;
 
-    /// <summary>是否已死亡（行为树 Dead 状态依赖）。</summary>
-    public bool IsDead => healthInfo != null && healthInfo.currentHP.Value <= 0f;
+    public event Action<float, float> HealthChanged;
+    public event Action Died;
+    public event Action Revived;
+
+    public float CurrentHP { get { EnsureInitialized(); return healthInfo.currentHP.Value; } }
+    public float MaxHP { get { EnsureInitialized(); return healthInfo.maxHP; } }
+    public bool IsDead => CurrentHP <= 0f;
+    protected virtual bool ShowWorldHealthBar => true;
 
     protected virtual void Awake()
     {
+        EnsureInitialized();
+    }
+
+    private void EnsureInitialized()
+    {
+        if (healthInfo != null)
+            return;
+
         animator = GetComponent<Animator>();
-        healthInfo=Instantiate(characterHealthInfo);
-
-        healthInfo.currentHP.OnValueChanged += OnUpdatePH;
+        barAnchor = transform.Find("BarUI");
+        healthInfo = characterHealthInfo != null
+            ? Instantiate(characterHealthInfo)
+            : ScriptableObject.CreateInstance<CharacterHealthInfo>();
+        healthInfo.hideFlags = HideFlags.DontSave;
+        healthInfo.InitHealthData(fallbackMaxHP);
+        currentHP = healthInfo.currentHP.Value;
+        wasDead = false;
     }
 
- 
-    private void Start()
-    {
-        healthInfo.InitHealthData();
-        
-        BarUI = transform.Find("BarUI");
-    }
-    protected virtual void Update()
-    {
-        LookAtAttacker();
-    }
     protected virtual void OnEnable()
     {
-        if (GameEventsManager.MainInstance != null)
+        EnsureInitialized();
+        if (!healthSubscribed)
         {
-            GameEventsManager.MainInstance.AddEventListening<float, string, string, Transform, Transform, CharacterComboBase>(HealthState.TriggerDamage.ToString(), OnCharacterHitEventHandler);
-            GameEventsManager.MainInstance.AddEventListening<float>(HealthState.GenerateDamage.ToString(), OnCharacterDamageAction);
-            GameEventsManager.MainInstance.AddEventListening<Transform>(HealthState.BrokenDefense.ToString(), OnBrokenDefenseEvent);
+            healthInfo.currentHP.OnValueChanged += OnHealthValueChanged;
+            healthSubscribed = true;
         }
 
-    }
+        eventManager = GameEventsManager.MainInstance;
+        if (eventManager != null)
+        {
+            eventManager.AddEventListening<float, string, string, Transform, Transform, CharacterComboBase>(HealthState.TriggerDamage.ToString(), OnCharacterHitEventHandler);
+            eventManager.AddEventListening<Transform>(HealthState.BrokenDefense.ToString(), OnBrokenDefenseEvent);
+        }
 
- 
+        nextBarLookupTime = 0f;
+        OnHealthValueChanged(healthInfo.currentHP.Value);
+    }
 
     protected virtual void OnDisable()
     {
-        if (GameEventsManager.MainInstance != null)
+        // Use the registered instance: a teardown must never create a new singleton.
+        if (eventManager != null)
         {
-            GameEventsManager.MainInstance.ReMoveEvent<float, string, string, Transform, Transform, CharacterComboBase>(HealthState.TriggerDamage.ToString(), OnCharacterHitEventHandler);
-            GameEventsManager.MainInstance.ReMoveEvent<float>(HealthState.GenerateDamage.ToString(), OnCharacterDamageAction);
-            GameEventsManager.MainInstance.ReMoveEvent<Transform>(HealthState.BrokenDefense.ToString(), OnBrokenDefenseEvent);
+            eventManager.ReMoveEvent<float, string, string, Transform, Transform, CharacterComboBase>(HealthState.TriggerDamage.ToString(), OnCharacterHitEventHandler);
+            eventManager.ReMoveEvent<Transform>(HealthState.BrokenDefense.ToString(), OnBrokenDefenseEvent);
         }
+        eventManager = null;
 
-        if (healthInfo == null)
+        if (healthInfo != null && healthSubscribed)
+            healthInfo.currentHP.OnValueChanged -= OnHealthValueChanged;
+        healthSubscribed = false;
+        ReleaseHealthBar();
+    }
+
+    protected virtual void OnDestroy()
+    {
+        ReleaseHealthBar();
+        if (healthInfo != null)
+            Destroy(healthInfo);
+    }
+
+    /// <summary>Apply one targeted hit. Returns false for dead, disabled or invalid recipients.</summary>
+    public bool ReceiveDamage(float damage, Transform attacker = null, string hitName = null)
+    {
+        return ApplyDamage(damage, attacker, hitName, null);
+    }
+
+    private bool ApplyDamage(float damage, Transform attacker, string hitName, string parryName)
+    {
+        if (!isActiveAndEnabled || IsDead || !IsPositiveFinite(damage))
+            return false;
+
+        var finalDamage = damage * GetDamageTakenMultiplier();
+        if (!IsPositiveFinite(finalDamage))
+            return false;
+
+        currentEnemy = attacker;
+        healthInfo.TakeDamage(finalDamage);
+        // Lethal hits enter death directly; their hit animation must not overwrite death.
+        if (!IsDead)
         {
+            CharacterHitAction(finalDamage, hitName, parryName);
+            OnCharacterHit(finalDamage, hitName, parryName, attacker);
+        }
+        return true;
+    }
+
+    public void Revive()
+    {
+        EnsureInitialized();
+        currentEnemy = null;
+        healthInfo.RestoreFullHealth();
+        if (!healthSubscribed)
+            OnHealthValueChanged(healthInfo.currentHP.Value);
+    }
+
+    public void Heal(float amount)
+    {
+        if (!isActiveAndEnabled || IsDead || !IsPositiveFinite(amount))
             return;
-        }
+        healthInfo.RePH(amount);
+    }
 
-        healthInfo.currentHP.OnValueChanged -= OnUpdatePH;
+    private static bool IsPositiveFinite(float value)
+    {
+        return value > 0f && !float.IsNaN(value) && !float.IsInfinity(value);
+    }
 
+    private bool IsRecipient(Transform recipient)
+    {
+        return recipient != null && recipient.GetComponentInParent<CharacterHealthBase>() == this;
+    }
+
+    private void OnCharacterHitEventHandler(float damage, string hitName, string parryName, Transform attacker, Transform bearer, CharacterComboBase characterCombo)
+    {
+        if (IsRecipient(bearer))
+            ApplyDamage(damage, attacker, hitName, parryName);
     }
 
     private void OnBrokenDefenseEvent(Transform bearer)
     {
-        if (bearer != transform)
-        {
-            return;
-        }
-
-        EnterBreakState();
+        if (isActiveAndEnabled && !IsDead && IsRecipient(bearer))
+            EnterBreakState();
     }
 
-    protected virtual void EnterBreakState()
+    protected virtual void EnterBreakState() { }
+    protected virtual float GetDamageTakenMultiplier() => 1f;
+    protected virtual void CharacterHitAction(float damage, string hitName, string parryName) { }
+    protected virtual void OnCharacterHit(float damage, string hitName, string parryName, Transform attacker) { }
+    protected virtual void OnDied() { }
+    protected virtual void OnRevived() { }
+
+    private void OnHealthValueChanged(float value)
     {
-        // 仅对敌人生效：进入破防状态
-        if (TryGetComponent<Enemy>(out var enemy))
-        {
-            enemy.EnterBreakState();
-        }
-    }
-
-    //事件注册
-    private void OnCharacterHitEventHandler(float Damage, string HitName, string ParryName, Transform Attacker, Transform Bearer, CharacterComboBase characterCombo)
-    {
-      
-        if (Bearer != this.transform) { return; }
-        Damage *= GetDamageTakenMultiplier();
-        SetEnemy(Attacker);
-        CharacterHitAction(Damage, HitName, ParryName);
-        OnCharacterHit(Damage, HitName, ParryName, Attacker);
-        OnCharacterDamageAction(Damage);
-    }
-
- 
-    protected void OnCharacterDamageAction(float damage)
-    {
-        healthInfo.TakeDamage(damage);
-    }
-
-    protected virtual void CharacterHitAction(float damage, string hitName, string parryName)
-    {
-        
-    }
-
-    /// <summary>
-    /// 受到攻击后的扩展点：子类可覆盖以响应受击（例如通知行为树进入 Hit 状态）。
-    /// </summary>
-    protected virtual void OnCharacterHit(float damage, string hitName, string parryName, Transform attacker)
-    {
-    }
-
-    protected virtual float GetDamageTakenMultiplier()
-    {
-        if (TryGetComponent<Enemy>(out var enemy))
-        {
-            // 非破防：只吃 20% 伤害；破防：吃满额伤害。
-            var baseMultiplier = enemy.IsInBreakState ? 1f : 0.2f;
-            return baseMultiplier * enemy.DamageTakenMultiplier;
-        }
-
-        return 1f;
-    }
-
-    protected virtual void SetEnemy(Transform attacker)
-    {
-        if (currentEnemy != attacker || currentEnemy == null)
-        { 
-            currentEnemy = attacker;    
-        }
-    }
-    private void LookAtAttacker()
-    {
-        if (currentEnemy == null) { return; }
-        if (animator.AnimationAtTag("Hit")&&animator.GetCurrentAnimatorStateInfo(0).normalizedTime<0.3f)
-        {
-            transform.LookAt(currentEnemy.position, 50);
-        }
-        
-    
-    }
-    protected void SetHitFVX(Transform attacker,Transform hitter)
-    { 
-        Vector3 hitDir = (attacker.position- hitter.position).normalized;
-        Vector3 targetPos = hitter.position + hitDir*0.8f+Vector3.up*1f;
-    }
-
-    private void OnUpdatePH(float value)
-    {
-        Debug.Log("敌人的血量为"+value);
         currentHP = value;
-        if (value > 0)
+        var dead = value <= 0f;
+        healthInfo.onDead.Value = dead;
+        if (healthBar != null)
         {
-            healthInfo.onDead.Value = false;
-            UIManager.MainInstance.EnemyBarUI.UpdateBlood(currentHP / healthInfo.maxHP);
+            healthBar.UpdateBlood(value / MaxHP);
+            healthBar.SetVisible(!dead);
+        }
+        if (dead == wasDead)
+        {
+            HealthChanged?.Invoke(currentHP, MaxHP);
             return;
         }
-        healthInfo.onDead.Value = true;
-
-
+        wasDead = dead;
+        if (dead)
+        {
+            currentEnemy = null;
+            OnDied();
+            Died?.Invoke();
+        }
+        else
+        {
+            OnRevived();
+            Revived?.Invoke();
+        }
+        HealthChanged?.Invoke(currentHP, MaxHP);
     }
 
-    private void LateUpdate()
+    protected virtual void Update()
     {
-        UIManager.MainInstance.EnemyBarUI.ShowAt(BarUI.transform.position);
+        if (IsDead || currentEnemy == null || animator == null || animator.runtimeAnimatorController == null)
+            return;
+        var state = animator.GetCurrentAnimatorStateInfo(0);
+        if (!state.IsTag("Hit") || state.normalizedTime >= 0.3f)
+            return;
+        var direction = currentEnemy.position - transform.position;
+        direction.y = 0f;
+        if (direction.sqrMagnitude > 0.0001f)
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(direction), 720f * Time.deltaTime);
+    }
+
+    protected virtual void LateUpdate()
+    {
+        if (!ShowWorldHealthBar)
+            return;
+        if (healthBar == null && !IsDead && Time.unscaledTime >= nextBarLookupTime)
+        {
+            nextBarLookupTime = Time.unscaledTime + 1f;
+            if (UIManager.TryGetExistingInstance(out var manager))
+            {
+                barOwner = manager;
+                healthBar = manager.GetOrCreateEnemyHealthBar(this);
+                if (healthBar != null)
+                    healthBar.UpdateBlood(CurrentHP / MaxHP, true);
+            }
+        }
+        if (healthBar == null)
+            return;
+        if (IsDead)
+        {
+            healthBar.SetVisible(false);
+            return;
+        }
+        healthBar.ShowAt(barAnchor != null ? barAnchor.position : transform.position + Vector3.up * 2f);
+    }
+
+    private void ReleaseHealthBar()
+    {
+        if (barOwner != null)
+            barOwner.ReleaseEnemyHealthBar(this);
+        healthBar = null;
+        barOwner = null;
     }
 }

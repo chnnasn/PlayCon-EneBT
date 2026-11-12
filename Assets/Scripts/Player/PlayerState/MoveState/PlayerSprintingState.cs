@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using PlayerState;
 using Tools;
 using UnityEngine.InputSystem;
@@ -48,22 +48,25 @@ namespace FSM
         {
             base.AddInputActionCallBacks();
 
-            PlayerInputSystem.MainInstance.inputActions.Player.Movement.canceled += OnBufferToIdle;
+            inputActions.Player.Movement.canceled += OnBufferToIdle;
 
         }
         protected override void RemoveInputActionCallBacks()
         {
             base.RemoveInputActionCallBacks();
             Debug.Log("移除run到idle的委托");
-            PlayerInputSystem.MainInstance.inputActions.Player.Movement.canceled -= OnBufferToIdle;
-            PlayerInputSystem.MainInstance.inputActions.Player.Movement.started -= OnUnregisterBufferTimer;
+            inputActions.Player.Movement.canceled -= OnBufferToIdle;
+            inputActions.Player.Movement.started -= OnUnregisterBufferTimer;
 
         }
 
         private void OnBufferToIdle(InputAction.CallbackContext context)
         {
-            gameTimer = TimerManager.MainInstance.GetTimer(playerMovementData.bufferToIdleTime, IdleStart);
-            PlayerInputSystem.MainInstance.inputActions.Player.Movement.started += OnUnregisterBufferTimer;
+            if (!IsCurrentState) return;
+            CancelTimer(gameTimer);
+            gameTimer = ScheduleTimer(playerMovementData.bufferToIdleTime, IdleStart);
+            inputActions.Player.Movement.started -= OnUnregisterBufferTimer;
+            inputActions.Player.Movement.started += OnUnregisterBufferTimer;
         }
 
 
@@ -74,14 +77,16 @@ namespace FSM
         }
         private void OnUnregisterBufferTimer(InputAction.CallbackContext context)
         {
+            if (!IsCurrentState) return;
             Debug.Log("注销Timer");
-            TimerManager.MainInstance.UnregisterTimer(gameTimer);
+            CancelTimer(gameTimer);
         }
         #endregion
 
         #region 转换到walk
         protected override void OnWalkStart(InputAction.CallbackContext context)
         {
+            if (!IsCurrentState) return;
             base.OnWalkStart(context);
             movementStateMachine.ChangeState(movementStateMachine.walkingState);
         }

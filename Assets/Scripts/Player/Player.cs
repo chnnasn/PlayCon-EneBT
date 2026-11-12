@@ -30,18 +30,52 @@ using Tools;
 
         public PlayerComboStateMachine comboStateMachine { get;private set; }
         public new Transform camera { get; private set; }
-        public Enemy CurrentEnemy => currentEnemy;
-        public bool IsManualEnemyLockActive => currentEnemy != null;
+        public Enemy CurrentEnemy => IsValidEnemy(currentEnemy) ? currentEnemy : null;
+        public bool IsManualEnemyLockActive => manualEnemyLock && CurrentEnemy != null;
+        public bool IsDead { get; private set; }
+        public bool CanAcceptInput => hasStarted && isActiveAndEnabled && !IsDead;
+        protected override bool CanMove => CanAcceptInput;
         private readonly Collider[] lockDetectionHits = new Collider[MaxLockDetectionHits];
+        private readonly RaycastHit[] visibilityHits = new RaycastHit[32];
+        private bool hasStarted;
+        private bool manualEnemyLock;
+        private float automaticEnemyLockExpireTime;
+        private bool puzzleCallbacksRegistered;
+        public int AnimationSession { get; private set; }
+
+        public readonly struct AnimationStateBinding
+        {
+            public readonly int Session;
+            public readonly int MovementRevision;
+            public readonly int ComboRevision;
+            public AnimationStateBinding(int session, int movementRevision, int comboRevision)
+            {
+                Session = session;
+                MovementRevision = movementRevision;
+                ComboRevision = comboRevision;
+            }
+        }
+
+        public AnimationStateBinding CaptureAnimationBinding()
+        {
+            return new AnimationStateBinding(AnimationSession, movementStateMachine.Revision, comboStateMachine.Revision);
+        }
         
         protected override void Awake()
         {
             base.Awake();
 
-            camera=Camera.main.transform;
+            if (playerSO == null || playerSO.movementData == null || playerSO.ComboData?.comboData == null)
+            {
+                Debug.LogError("Player requires movement and combo data in PlayerSO.", this);
+                enabled = false;
+                return;
+            }
+
+            camera = Camera.main != null ? Camera.main.transform : null;
             movementStateMachine =new PlayerMovementStateMachine(this);
             comboStateMachine = new PlayerComboStateMachine(this);
-            playerCameraUtility.Init();
+            playerCameraUtility?.Init();
             if (puzzleManager == null)
                 puzzleManager = FindObjectOfType<PuzzleManager>();
         }
@@ -51,15 +85,18 @@ using Tools;
         protected override void Start()
         {
             base.Start();
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
-            movementStateMachine.ChangeState(movementStateMachine.idlingState);
-            comboStateMachine.ChangeState(comboStateMachine.NullState);
-            StartCoroutine(BlockCameraInputOnStartup());
+            hasStarted = true;
+            if (!IsDead) StartPlayerControl();
         }
        protected override void Update()
         {
+            if (!CanAcceptInput) return;
             base.Update();
+            if ((currentEnemy != null || manualEnemyLock) && (!IsValidEnemy(currentEnemy) ||
+                (!manualEnemyLock && Time.time >= automaticEnemyLockExpireTime)))
+            {
+                CancelManualEnemyLock();
+            }
 
             movementStateMachine.HandInput();
             movementStateMachine.Update();
@@ -72,50 +109,115 @@ using Tools;
 
         public void OnAnimationEnterEvent(AnimationState playerState)
         {
+            if (!CanAcceptInput) return;
             switch (playerState)
             {
                 case AnimationState.TurnBack:
-                    movementStateMachine.OnAnimationTranslateEvent(movementStateMachine.returnRunState);
+                    EnterAnimationState(movementStateMachine, movementStateMachine.returnRunState);
                     break;
                 case AnimationState.Dash:
-                    movementStateMachine.OnAnimationTranslateEvent(movementStateMachine.dashingState);
-                    comboStateMachine.OnAnimationTranslateEvent(comboStateMachine.NullState);
+                    EnterAnimationState(movementStateMachine, movementStateMachine.dashingState);
+                    EnterAnimationState(comboStateMachine, comboStateMachine.NullState);
                     break;
                 case AnimationState.ATK:
-                    comboStateMachine.OnAnimationTranslateEvent(comboStateMachine.ATKIngState);
-                    movementStateMachine.OnAnimationTranslateEvent(movementStateMachine.playerMovementNullState);
+                    EnterAnimationState(comboStateMachine, comboStateMachine.ATKIngState);
+                    EnterAnimationState(movementStateMachine, movementStateMachine.playerMovementNullState);
                     break;
                 case AnimationState.DashBack:
-                    movementStateMachine.OnAnimationTranslateEvent(movementStateMachine.dashBackingState);
-                    comboStateMachine.OnAnimationTranslateEvent(comboStateMachine.NullState);
+                    EnterAnimationState(movementStateMachine, movementStateMachine.dashBackingState);
+                    EnterAnimationState(comboStateMachine, comboStateMachine.NullState);
                     break;
             }
             
         }
-        public void OnAnimationExitEvent()
+        private static void EnterAnimationState(StateMachine machine, IState state)
         {
-            movementStateMachine.OnAnimationExitEvent();
+            if (!machine.IsRunning) return;
+            if (ReferenceEquals(machine.currentState.Value, state)) machine.Start(state);
+            else machine.OnAnimationTranslateEvent(state);
+        }
 
-            comboStateMachine.OnAnimationExitEvent();
+        public void OnAnimationExitEvent(AnimationStateBinding source)
+        {
+            if (!CanAcceptInput || source.Session != AnimationSession) return;
+            if (source.MovementRevision == movementStateMachine.Revision)
+                movementStateMachine.OnAnimationExitEvent();
+            if (source.ComboRevision == comboStateMachine.Revision)
+                comboStateMachine.OnAnimationExitEvent();
         }
         #endregion
 
         #region 状态变更事件
         public void OnEnable()
         {
+            if (movementStateMachine == null || comboStateMachine == null) return;
             //注册movement状态机中的状态变更事件
             movementStateMachine.currentState.OnValueChanged += MovementStateChanged;
             comboStateMachine.currentState.OnValueChanged += ComboStateChanged;
-            RegisterPuzzleInputCallbacks();
+            if (hasStarted && !IsDead) StartPlayerControl();
         }
        
 
         public void OnDisable()
         {
-            movementStateMachine.currentState.OnValueChanged -= MovementStateChanged;
-            comboStateMachine.currentState.OnValueChanged -= ComboStateChanged;
+            StopPlayerControl();
+            if (movementStateMachine != null) movementStateMachine.currentState.OnValueChanged -= MovementStateChanged;
+            if (comboStateMachine != null) comboStateMachine.currentState.OnValueChanged -= ComboStateChanged;
+        }
+
+        public void OnDeath()
+        {
+            if (IsDead) return;
+            IsDead = true;
+            StopPlayerControl();
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+
+        public void OnRevived()
+        {
+            IsDead = false;
+            if (hasStarted && isActiveAndEnabled) StartPlayerControl();
+        }
+
+        private void StartPlayerControl()
+        {
+            if (!CanAcceptInput) return;
+            StopPlayerControl();
+            verticalSpeed = 0f;
+            fallOutdeltaTimer = fallOutTimer;
+            movementStateMachine.reusableDate.shouldWalk = false;
+            movementStateMachine.reusableDate.dashCooldownEndTime = 0f;
+            comboStateMachine.ReusableData.hasATKCommand = false;
+            characterAnimator.Rebind();
+            characterAnimator.Update(0f);
+            movementStateMachine.Start(movementStateMachine.idlingState);
+            comboStateMachine.Start(comboStateMachine.NullState);
+            MovementStateChanged(movementStateMachine.currentState.Value);
+            ComboStateChanged(comboStateMachine.currentState.Value);
+            RegisterPuzzleInputCallbacks();
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+            StartCoroutine(BlockCameraInputOnStartup());
+        }
+
+        private void StopPlayerControl()
+        {
+            AnimationSession++;
+            StopAllCoroutines();
+            movementStateMachine?.Stop();
+            comboStateMachine?.Stop();
             UnregisterPuzzleInputCallbacks();
-            playerCameraUtility.SetInputEnabled(true);
+            CancelManualEnemyLock();
+            playerCameraUtility?.DisableRecentering();
+            playerCameraUtility?.SetInputEnabled(false);
+            if (characterAnimator != null)
+            {
+                characterAnimator.SetFloat(AnimID.MovementID, 0f);
+                characterAnimator.SetBool(AnimID.HasInputID, false);
+            }
+            currentMovementState = IsDead ? "Dead" : "Disabled";
+            currentComboState = IsDead ? "Dead" : "Disabled";
         }
     
 
@@ -131,23 +233,26 @@ using Tools;
 
         private void RegisterPuzzleInputCallbacks()
         {
+            if (puzzleCallbacksRegistered) return;
             if (PlayerInputSystem.MainInstance?.inputActions?.Player == null)
                 return;
 
             PlayerInputSystem.MainInstance.inputActions.Player.Puzzle.started += OnPuzzleStarted;
             PlayerInputSystem.MainInstance.inputActions.Player.Puzzle.canceled += OnPuzzleCanceled;
             PlayerInputSystem.MainInstance.inputActions.Player.MousePo.performed += OnPuzzlePointerMoved;
+            puzzleCallbacksRegistered = true;
             RegisterPuzzleManagerCallbacks();
         }
 
         private void UnregisterPuzzleInputCallbacks()
         {
-            if (PlayerInputSystem.MainInstance?.inputActions?.Player == null)
-                return;
-
-            PlayerInputSystem.MainInstance.inputActions.Player.Puzzle.started -= OnPuzzleStarted;
-            PlayerInputSystem.MainInstance.inputActions.Player.Puzzle.canceled -= OnPuzzleCanceled;
-            PlayerInputSystem.MainInstance.inputActions.Player.MousePo.performed -= OnPuzzlePointerMoved;
+            if (puzzleCallbacksRegistered && PlayerInputSystem.TryGetExistingInstance(out var inputSystem) && inputSystem.inputActions != null)
+            {
+                inputSystem.inputActions.Player.Puzzle.started -= OnPuzzleStarted;
+                inputSystem.inputActions.Player.Puzzle.canceled -= OnPuzzleCanceled;
+                inputSystem.inputActions.Player.MousePo.performed -= OnPuzzlePointerMoved;
+            }
+            puzzleCallbacksRegistered = false;
             UnregisterPuzzleManagerCallbacks();
         }
 
@@ -175,14 +280,14 @@ using Tools;
 
         private void OnOneStrokeDrawingStateChanged(bool isDrawing)
         {
-            playerCameraUtility?.SetInputEnabled(!isDrawing);
+            playerCameraUtility?.SetInputEnabled(CanAcceptInput && !isDrawing);
         }
 
         private void OnOneStrokeTimedOut()
         {
             Cursor.visible = false;
             Cursor.lockState = CursorLockMode.Locked;
-            playerCameraUtility?.SetInputEnabled(true);
+            playerCameraUtility?.SetInputEnabled(CanAcceptInput);
         }
 
         private bool TryDetectEnemyFromForward(out Enemy enemyTarget)
@@ -235,7 +340,7 @@ using Tools;
                 }
 
                 var candidateEnemy = hitCollider.GetComponentInParent<Enemy>();
-                if (candidateEnemy == null)
+                if (!IsValidEnemy(candidateEnemy) || !HasClearPathToEnemy(candidateEnemy, sourceCamera.position))
                 {
                     continue;
                 }
@@ -273,6 +378,7 @@ using Tools;
 
         private void OnPuzzleStarted(InputAction.CallbackContext context)
         {
+            if (!CanAcceptInput) return;
             if (puzzleManager == null)
                 return;
             if (Mouse.current == null || !Mouse.current.rightButton.wasPressedThisFrame)
@@ -321,6 +427,7 @@ using Tools;
 
         private void OnPuzzlePointerMoved(InputAction.CallbackContext context)
         {
+            if (!CanAcceptInput) return;
             if (puzzleManager == null || !puzzleManager.IsPuzzleSession)
                 return;
             if (!PlayerInputSystem.MainInstance.inputActions.Player.Puzzle.IsPressed())
@@ -331,6 +438,7 @@ using Tools;
 
         private void OnPuzzleCanceled(InputAction.CallbackContext context)
         {
+            if (!CanAcceptInput || puzzleManager == null) return;
             
             Cursor.visible = false;
             Cursor.lockState = CursorLockMode.Locked;
@@ -347,24 +455,42 @@ using Tools;
         #region 连招动画事件
         public void EnablePreInput()
         {
+            if (!CanAcceptInput) return;
             comboStateMachine.ATKIngState.EnablePreInput();
         }
         public void CancelAttackColdTime()
         { 
+            if (!CanAcceptInput) return;
             comboStateMachine.ATKIngState.CancelAttackColdTime();
         }
       
         public void DisableLinkCombo()
         { 
+            if (!CanAcceptInput) return;
             comboStateMachine.ATKIngState.DisableLinkCombo();
         }
         public void EnableMoveInterrupt()
         {
+            if (!CanAcceptInput) return;
             comboStateMachine.ATKIngState.EnableMoveInterrupt();
         }
      
-        public void ATK()
+        public void ATK(AnimationEvent animationEvent = null)
         {
+            if (!CanAcceptInput || !comboStateMachine.IsRunning) return;
+            var state = comboStateMachine.currentState.Value;
+            if (ReferenceEquals(state, comboStateMachine.ATKIngState))
+            {
+                var data = comboStateMachine.ReusableData;
+                if (data.currentCombo == null) return;
+                if (animationEvent != null && animationEvent.isFiredByAnimator &&
+                    animationEvent.animatorStateInfo.shortNameHash != Animator.StringToHash(data.currentCombo.GetComboName(data.currentIndex.Value))) return;
+            }
+            else if (ReferenceEquals(state, comboStateMachine.SkillState))
+            {
+                if (animationEvent != null && animationEvent.isFiredByAnimator && !animationEvent.animatorStateInfo.IsTag("Skill")) return;
+            }
+            else return;
             comboStateMachine.ATKIngState.ATK();
         }
 
@@ -402,9 +528,39 @@ using Tools;
             
         }
 
-        public void SetCurrentEnemy(Enemy enemyTarget)
+        public void SetCurrentEnemy(Enemy enemyTarget, bool manualLock = true)
         {
-            currentEnemy = enemyTarget;
+            currentEnemy = IsValidEnemy(enemyTarget) ? enemyTarget : null;
+            manualEnemyLock = currentEnemy != null && manualLock;
+            automaticEnemyLockExpireTime = currentEnemy != null && !manualEnemyLock ? Time.time + 0.35f : 0f;
+        }
+
+        public static bool IsValidEnemy(Enemy enemyTarget)
+        {
+            return enemyTarget != null && enemyTarget.isActiveAndEnabled && !enemyTarget.IsDead;
+        }
+
+        public bool HasClearPathToEnemy(Enemy enemyTarget)
+        {
+            return HasClearPathToEnemy(enemyTarget, transform.position + Vector3.up * 0.7f);
+        }
+
+        private bool HasClearPathToEnemy(Enemy enemyTarget, Vector3 origin)
+        {
+            if (!IsValidEnemy(enemyTarget)) return false;
+            var direction = enemyTarget.transform.position + Vector3.up * 0.7f - origin;
+            var distance = direction.magnitude;
+            if (distance <= 0.001f) return true;
+            var hitCount = Physics.RaycastNonAlloc(origin, direction / distance, visibilityHits, distance,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            if (hitCount == visibilityHits.Length) return false;
+            for (var i = 0; i < hitCount; i++)
+            {
+                var hitTransform = visibilityHits[i].transform;
+                if (hitTransform.IsChildOf(transform) || hitTransform.IsChildOf(enemyTarget.transform)) continue;
+                return false;
+            }
+            return true;
         }
 
         private void CancelManualEnemyLock()
@@ -416,14 +572,14 @@ using Tools;
                 puzzleManager.CancelPuzzleSession(hideUi: true);
             }
 
-            Cursor.visible = false;
-            Cursor.lockState = CursorLockMode.Locked;
-            playerCameraUtility?.SetInputEnabled(true);
+            Cursor.visible = IsDead;
+            Cursor.lockState = IsDead ? CursorLockMode.None : CursorLockMode.Locked;
+            playerCameraUtility?.SetInputEnabled(CanAcceptInput);
         }
 
         private IEnumerator BlockCameraInputOnStartup()
         {
-            playerCameraUtility.SetInputEnabled(false);
+            playerCameraUtility?.SetInputEnabled(false);
             if (startupCameraInputBlockSeconds > 0f)
             {
                 yield return new WaitForSeconds(startupCameraInputBlockSeconds);
@@ -433,7 +589,7 @@ using Tools;
                 yield return null;
             }
 
-            playerCameraUtility.SetInputEnabled(true);
+            playerCameraUtility?.SetInputEnabled(CanAcceptInput && (puzzleManager == null || !puzzleManager.IsPuzzleSession));
         }
 
         private void OnDrawGizmosSelected()

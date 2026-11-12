@@ -18,6 +18,8 @@ namespace FSM
             reusableDate.rotationTime= playerMovementData.idleData.rotationTime;
             animator.SetBool(AnimID.HasInputID, false);
             reusableDate.inputMult = playerMovementData.idleData.inputMult;
+            if (GetPlayerMovementInputDirection() != Vector2.zero)
+                GameTimer = ScheduleTimer(0.11f, CheckMoveInput);
 
         }
         public override void Update()
@@ -27,18 +29,20 @@ namespace FSM
         protected override void AddInputActionCallBacks()
         {
             base.AddInputActionCallBacks();
-            PlayerInputSystem.MainInstance.inputActions.Player.Movement.started += bufferToRun;
+            inputActions.Player.Movement.started += bufferToRun;
         }
         protected override void RemoveInputActionCallBacks() 
         {
             base.RemoveInputActionCallBacks();
-            PlayerInputSystem.MainInstance.inputActions.Player.Movement.started -= bufferToRun;
-            TimerManager.MainInstance.UnregisterTimer(GameTimer);
+            inputActions.Player.Movement.started -= bufferToRun;
+            CancelTimer(GameTimer);
         }
 
         private void bufferToRun(InputAction.CallbackContext context)
-        {          
-          GameTimer=TimerManager.MainInstance.GetTimer(0.11f,CheckMoveInput);
+        {
+           if (!IsCurrentState) return;
+           CancelTimer(GameTimer);
+           GameTimer = ScheduleTimer(0.11f, CheckMoveInput);
         }
 
         private void CheckMoveInput()

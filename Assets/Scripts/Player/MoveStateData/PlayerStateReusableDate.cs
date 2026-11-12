@@ -8,7 +8,8 @@ namespace PlayerState
 
         public bool shouldWalk { get; set; }
         
-        public bool canDash { get; set; } = true;
+        public float dashCooldownEndTime { get; set; }
+        public bool canDash => Time.time >= dashCooldownEndTime;
         
         public Vector2 inputDirection { get; set; }
 

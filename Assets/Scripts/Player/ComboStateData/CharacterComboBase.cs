@@ -51,6 +51,7 @@ namespace PlayerState
 
         public virtual bool CanBaseComboInput()
         {
+            if (!player.CanAcceptInput) return false;
             if (!reusableData.canInput) { return false; }
             if (animator.AnimationAtTag("Hit")) return false;
             if (animator.AnimationAtTag("Parry")) return false;
@@ -143,6 +144,7 @@ namespace PlayerState
         public virtual void ReSetComboInfo()
         {
             reusableData.comboIndex = 0;
+            reusableData.hasATKCommand = false;
             reusableData.canInput = true;
             reusableData.canLink = true;
             reusableData.canMoveInterrupt = false;
@@ -179,6 +181,7 @@ namespace PlayerState
         
         public void ATK()
         {
+            if (!player.CanAcceptInput) return;
             OnAttackWindowTriggered();
             AttackTrigger();
 
@@ -190,12 +193,17 @@ namespace PlayerState
         #region 伤害检测
         protected bool AttackDetection(ComboContainerData comboContainerData)
         {
+            return comboContainerData != null && AttackDetection(comboContainerData.GetComboDistance(reusableData.currentIndex.Value));
+        }
 
-            if (player.CurrentEnemy == null) { return false; }
-            if (MathToos.DistanceForTarget(player.CurrentEnemy.transform, playerTransform) > comboContainerData.
-                    GetComboDistance(reusableData.currentIndex.Value)) { return false; }
-            if (MathToos.GetAngleForTargetDirection(player.CurrentEnemy.transform, playerTransform) < 80) { return false; }
-            return true;
+        private bool AttackDetection(float attackDistance)
+        {
+            var enemy = player.CurrentEnemy;
+            if (!player.CanAcceptInput || !Player.IsValidEnemy(enemy)) return false;
+            var direction = enemy.transform.position - playerTransform.position;
+            if (direction.sqrMagnitude > attackDistance * attackDistance) return false;
+            if (Vector3.Angle(playerTransform.forward, direction) > 100f) return false;
+            return player.HasClearPathToEnemy(enemy);
         }
         
         #endregion 
@@ -246,7 +254,7 @@ namespace PlayerState
                 UpdateATKIndex();
                 
                
-                if (player.CurrentEnemy == null) { return; }
+                if (reusableData.currentSkill == null || !AttackDetection(reusableData.currentSkill.attackDistance)) return;
                 var skillEnemy = player.CurrentEnemy;
                 GameEventsManager.MainInstance.CallEvent(HealthState.TriggerDamage.ToString(), reusableData.currentSkill.comboDamage, reusableData.currentSkill.hitName, reusableData.currentSkill.parryName, playerTransform, skillEnemy.transform,this);
 

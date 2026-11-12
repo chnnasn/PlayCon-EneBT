@@ -1,42 +1,49 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using Tools;
 
-[CreateAssetMenu(fileName = "CharacterHealthData",menuName = "Create/Asset/CharacterHealthData")]
+[CreateAssetMenu(fileName = "CharacterHealthData", menuName = "Create/Asset/CharacterHealthData")]
 public class CharacterHealthData : ScriptableObject
 {
     [field: SerializeField] public float maxHP { get; private set; }
 }
 
-[CreateAssetMenu(fileName ="CharacterHealthInfo",menuName ="Create/Asset/CharacterHealthInfo")]
+[CreateAssetMenu(fileName = "CharacterHealthInfo", menuName = "Create/Asset/CharacterHealthInfo")]
 public class CharacterHealthInfo : ScriptableObject
 {
-    [SerializeField]private CharacterHealthData healthData;
-  
+    [SerializeField] private CharacterHealthData healthData;
     public GenericProperty<float> currentHP = new GenericProperty<float>();
     public GenericProperty<bool> onDead = new GenericProperty<bool>();
     public float maxHP;
 
-    public void InitHealthData()
+    public void InitHealthData(float fallbackMaxHP = 100f)
     {
-        maxHP= healthData.maxHP;
-        currentHP.Value = healthData.maxHP;
-        Debug.Log("敌人初始化的血量为" + currentHP.Value);
+        var configuredMax = healthData != null ? healthData.maxHP : maxHP;
+        maxHP = IsPositiveFinite(configuredMax) ? configuredMax : IsPositiveFinite(fallbackMaxHP) ? fallbackMaxHP : 100f;
+        // The asset is configuration; every runtime clone owns fresh mutable properties.
+        currentHP = new GenericProperty<float>();
+        onDead = new GenericProperty<bool>();
+        currentHP.Value = maxHP;
     }
-    public void TakeDamage(float Damage)
+
+    public void TakeDamage(float damage)
     {
-        currentHP.Value = TakeHealthValue(currentHP.Value, Damage, healthData.maxHP, false);
+        if (IsPositiveFinite(damage))
+            currentHP.Value = Mathf.Clamp(currentHP.Value - damage, 0f, maxHP);
     }
-    public void RePH(float Damage)
+
+    public void RePH(float amount)
     {
-        currentHP.Value = TakeHealthValue(currentHP.Value, Damage, healthData.maxHP, true);
+        if (IsPositiveFinite(amount))
+            currentHP.Value = Mathf.Clamp(currentHP.Value + amount, 0f, maxHP);
     }
-    
-    private float TakeHealthValue(float currentValue,float offsetValue,float maxValue,bool canAdd)
+
+    public void RestoreFullHealth()
     {
-        return Mathf.Clamp(canAdd?currentValue+ offsetValue:currentValue-offsetValue,0, maxValue);
-    
+        currentHP.Value = maxHP;
+    }
+
+    private static bool IsPositiveFinite(float value)
+    {
+        return value > 0f && !float.IsNaN(value) && !float.IsInfinity(value);
     }
 }

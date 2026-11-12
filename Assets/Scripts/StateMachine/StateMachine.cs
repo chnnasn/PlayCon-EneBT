@@ -11,6 +11,26 @@ namespace FSM
 
             //这是一个继承了BindableProperty类型的IState字段，获取Istate要通过.Value
             public GenericProperty<IState> currentState = new GenericProperty<IState>();
+            public bool IsRunning { get; private set; } = true;
+            public int Revision { get; private set; }
+
+            public void Stop()
+            {
+                if (!IsRunning) return;
+                IsRunning = false;
+                Revision++;
+                currentState.Value?.Exit();
+            }
+
+            public void Start(IState initialState)
+            {
+                if (initialState == null) throw new ArgumentNullException(nameof(initialState));
+                Stop();
+                IsRunning = true;
+                Revision++;
+                currentState.Value = initialState;
+                currentState.Value?.Enter();
+            }
 
             /// <summary>
             /// 切换状态的接口API
@@ -18,6 +38,8 @@ namespace FSM
             /// <param name="newState"></param>
             public void ChangeState(IState newState)
             { 
+                if (!IsRunning || newState == null || ReferenceEquals(currentState.Value, newState)) return;
+                Revision++;
                
                 //可能为空用？逻辑符
                 currentState.Value?.Exit();
@@ -33,26 +55,26 @@ namespace FSM
             public void HandInput()
             {
                 //只允许一个状态在这里更新
-                currentState.Value?.HandInput();
+                if (IsRunning) currentState.Value?.HandInput();
             }
             /// <summary>
             /// 更新非物理逻辑的接口API
             /// </summary>
             public void Update()
             {
-                currentState.Value?.Update();
+                if (IsRunning) currentState.Value?.Update();
             }
             /// <summary>
             /// 执行动画事件的接口API
             /// </summary>
             public void OnAnimationTranslateEvent(IState translateState)
             {
-                currentState.Value?.OnAnimationTranslateEvent(translateState);
+                if (IsRunning) currentState.Value?.OnAnimationTranslateEvent(translateState);
             }
             
             public void OnAnimationExitEvent() 
             {
-                currentState.Value?.OnAnimationExitEvent();
+                if (IsRunning) currentState.Value?.OnAnimationExitEvent();
             }
         }
 }
